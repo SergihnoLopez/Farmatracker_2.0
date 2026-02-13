@@ -28,6 +28,10 @@ logs/*.log
 *.sqlite
 *.sqlite3
 
+# Backups (nuevo)
+backups/
+backup_*.db
+
 # PDFs generados
 factura_*.pdf
 pedido_*.pdf

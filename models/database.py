@@ -1,5 +1,6 @@
 """
 Capa de acceso a datos con gestión segura de conexiones
+MEJORADO: Incluye sistema de backups automáticos antes de operaciones críticas
 """
 import sqlite3
 import logging
@@ -193,12 +194,30 @@ class DatabaseManager:
 
     @staticmethod
     def resetear_stock() -> bool:
-        """Resetea todo el stock a 0 (requiere confirmación externa)"""
+        """
+        Resetea todo el stock a 0 (requiere confirmación externa)
+        ✅ MEJORADO: Crea backup automático antes de ejecutar
+        """
         try:
+            # 🔒 BACKUP AUTOMÁTICO ANTES DE OPERACIÓN CRÍTICA
+            from utils.backup import backup_antes_operacion_critica
+
+            backup_path = backup_antes_operacion_critica("reseteo_stock")
+
+            if not backup_path:
+                logging.error("No se pudo crear backup, operación cancelada")
+                return False
+
+            logging.info(f"Backup creado antes de reseteo: {backup_path}")
+
+            # Ejecutar operación
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("UPDATE productos SET cantidad = 0")
-                return True
+
+            logging.info("Stock reseteado exitosamente")
+            return True
+
         except sqlite3.Error as e:
             logging.error(f"Error al resetear stock: {e}")
             return False
@@ -207,12 +226,24 @@ class DatabaseManager:
     def actualizar_precios_desde_lista(actualizaciones: List[Tuple[str, float, float]]) -> Tuple[int, int]:
         """
         Actualiza precios de múltiples productos desde una lista
+        ✅ MEJORADO: Crea backup automático antes de actualización masiva
         Returns: (actualizados, insertados)
         """
         actualizados = 0
         insertados = 0
 
         try:
+            # 🔒 BACKUP AUTOMÁTICO ANTES DE OPERACIÓN MASIVA
+            from utils.backup import backup_antes_operacion_critica
+
+            backup_path = backup_antes_operacion_critica("actualizacion_masiva_precios")
+
+            if not backup_path:
+                logging.warning("No se pudo crear backup, continuando con precaución")
+            else:
+                logging.info(f"Backup creado antes de actualización masiva: {backup_path}")
+
+            # Ejecutar actualización
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
@@ -236,7 +267,9 @@ class DatabaseManager:
                         """, (codigo, precio_compra, bonificacion))
                         insertados += 1
 
+                logging.info(f"Actualización masiva completada: {actualizados} actualizados, {insertados} insertados")
                 return (actualizados, insertados)
+
         except sqlite3.Error as e:
             logging.error(f"Error en actualización masiva: {e}")
             return (0, 0)

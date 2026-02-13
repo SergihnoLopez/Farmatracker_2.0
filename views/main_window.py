@@ -6,6 +6,7 @@ from tkinter import LEFT
 from PIL import Image, ImageTk
 from config.settings import FONT_STYLE, BG_COLOR, RESOURCES_DIR
 import logging
+from views.backup_window import BackupWindow
 
 
 class MainWindow:
@@ -56,12 +57,17 @@ class MainWindow:
         # Botones principales
         self._create_buttons()
 
+    def _abrir_gestion_backups(self):
+        """Abre la ventana de gestión de backups"""
+        BackupWindow(self.root)
+
     def _create_buttons(self):
         """Crea los botones del menú principal"""
         # Importar controladores aquí para evitar importación circular
         from views.venta_window import VentaWindow
         from views.inventario_window import InventarioWindow
         from views.pedidos_window import PedidosWindow
+        from views.backup_window import BackupWindow  # ← NUEVO
 
         frame_botones1 = Frame(self.main_frame, bg=BG_COLOR)
         frame_botones1.pack()
@@ -91,7 +97,8 @@ class MainWindow:
         botones2 = [
             ("Liquidador", self._abrir_liquidador, "#c288e2"),
             ("Actualizar Inventario", self._abrir_actualizar_inventario, "#3485e2"),
-            ("Verificación Rápida", self._abrir_verificacion_rapida, "#3ec4ed")
+            ("Verificación Rápida", self._abrir_verificacion_rapida, "#3ec4ed"),
+            ("💾 Gestión de Backups", self._abrir_gestion_backups, "#4CAF50")  # ← NUEVO
         ]
 
         for texto, comando, color in botones2:
@@ -105,6 +112,12 @@ class MainWindow:
                 width=20,
                 height=2
             ).pack(side=LEFT, padx=10)
+
+    # Al final de la clase, agregar el método handler:
+
+    def _abrir_gestion_backups(self):
+        """Abre la ventana de gestión de backups"""
+        BackupWindow(self.root)
 
     def _load_animation(self):
         """Carga y reproduce la animación GIF"""

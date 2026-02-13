@@ -174,8 +174,6 @@ class InventarioWindow:
         # Variable para control de orden
         self.orden_columnas = {}
 
-
-
     def _setup_context_menu(self):
         """Configura menú de clic derecho"""
         self.menu_contextual = Menu(self.window, tearoff=0)
