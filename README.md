@@ -22,6 +22,41 @@ El proyecto busca facilitar el registro de productos, el manejo de stock y el co
         Git
         Visual Studio Code / PyCharm
 
-📂 Estructura del proyecto
-
-/mnt/project/ │ ├── 📄 main.py # Punto de entrada ├── 📄 requirements.txt # Dependencias │ ├── 📁 config/ # ⚙️ Configuración │ └── settings.py # Rutas, UI, info empresa │ ├── 📁 models/ # 🗄️ Base de datos │ └── database.py # SQLite + operaciones CRUD │ ├── 📁 controllers/ # 🎮 Lógica de negocio │ ├── inventario.py # Gestión inventario │ ├── pedidos.py # Gestión pedidos │ ├── ventas.py # Gestión ventas │ └── pdf_generator.py # Facturas PDF │ ├── 📁 utils/ # 🔧 Herramientas │ ├── validators.py # Validaciones │ └── formatters.py # Formateo datos │ ├── 📁 views/ # 🖥️ Interfaces (8 ventanas) │ ├── main_window.py # Menú principal │ ├── venta_window.py # Ventas │ ├── inventario_window.py # Inventario │ ├── pedidos_window.py # Pedidos │ ├── agregar_producto_window.py # Nuevo producto │ ├── liquidador_window.py # Liquidación │ ├── actualizador_window.py # Actualización masiva │ └── verificacion_window.py # Verificación rápida │ ├── 📁 resources/ # 🎨 Recursos │ └── animacion.gif # Animación inicio │ └── 📁 logs/ # 📋 Logs (auto-generado) └── farmatrack.log
+Farmatracker_2.0/
+│
+├── 📄 main.py                  # Punto de entrada de la aplicación
+├── 📄 requirements.txt         # Dependencias del proyecto
+│
+├── 📁 config/                  # ⚙️ Configuración general
+│   └── settings.py             # Rutas, UI e información de la empresa
+│
+├── 📁 models/                  # 🗄️ Base de datos
+│   └── database.py             # SQLite y operaciones CRUD
+│
+├── 📁 controllers/             # 🎮 Lógica de negocio
+│   ├── inventario.py           # Gestión de inventario
+│   ├── pedidos.py              # Gestión de pedidos
+│   ├── ventas.py               # Gestión de ventas
+│   └── pdf_generator.py        # Generación de facturas en PDF
+│
+├── 📁 utils/                   # 🔧 Utilidades y helpers
+│   ├── validators.py           # Validaciones de datos
+│   └── formatters.py           # Formateo de información
+│
+├── 📁 views/                   # 🖥️ Interfaces gráficas (8 ventanas)
+│   ├── main_window.py          # Menú principal
+│   ├── venta_window.py         # Ventana de ventas
+│   ├── inventario_window.py    # Gestión de inventario
+│   ├── pedidos_window.py       # Gestión de pedidos
+│   ├── agregar_producto_window.py # Registro de nuevos productos
+│   ├── liquidador_window.py    # Liquidación de ventas
+│   ├── actualizador_window.py  # Actualización masiva
+│   └── verificacion_window.py  # Verificación rápida
+│
+├── 📁 resources/               # 🎨 Recursos gráficos
+│   └── animacion.gif           # Animación de inicio
+│
+├── 📁 logs/                    # 📋 Registros del sistema (auto-generado)
+│   └── farmatrack.log
+│
+└── 📁 .venv/                   # Entorno virtual (no versionado)
