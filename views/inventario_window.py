@@ -1,5 +1,6 @@
 """
 Ventana de gestión de inventario
+✅ MEJORADO: Bugs corregidos + Registro de auditoría
 """
 from tkinter import (Toplevel, Frame, Label, Entry, Button, Menu, END, W,
                      messagebox, filedialog, Scrollbar, BOTH, LEFT, RIGHT, Y, VERTICAL)
@@ -174,6 +175,8 @@ class InventarioWindow:
         # Variable para control de orden
         self.orden_columnas = {}
 
+
+
     def _setup_context_menu(self):
         """Configura menú de clic derecho"""
         self.menu_contextual = Menu(self.window, tearoff=0)
@@ -229,8 +232,9 @@ class InventarioWindow:
                 for item in self.tree.get_children():
                     self.tree.delete(item)
 
+                # Convertir Row objects a tuplas antes de insertar
                 for producto in resultados:
-                    self.tree.insert("", "end", values=producto)
+                    self.tree.insert("", "end", values=tuple(producto))
 
                 if not resultados:
                     messagebox.showinfo("Sin resultados", "No se encontraron productos")
@@ -433,7 +437,10 @@ class InventarioWindow:
                 messagebox.showerror("Error", "No se pudo eliminar el producto")
 
     def _resetear_stock(self):
-        """Resetea todo el stock a 0 (requiere contraseña)"""
+        """
+        Resetea todo el stock a 0 (requiere contraseña)
+        ✅ MEJORADO: Registra en log de auditoría
+        """
         # Ventana de contraseña
         ventana_pass = Toplevel(self.window)
         ventana_pass.title("Confirmación requerida")
@@ -478,14 +485,32 @@ class InventarioWindow:
                 ventana_pass.destroy()
                 return
 
-            # Ejecutar reseteo
+            # ✅ REGISTRO DE AUDITORÍA
+            from datetime import datetime
+            logging.warning(
+                f"AUDITORÍA - Reseteo de stock iniciado - "
+                f"Usuario: Principal - "
+                f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
+            # Ejecutar reseteo (incluye backup automático en database.py)
             if DatabaseManager.resetear_stock():
                 self._cargar_productos()
+
+                # ✅ REGISTRO DE AUDITORÍA EXITOSA
+                logging.warning(
+                    f"AUDITORÍA - Reseteo de stock COMPLETADO - "
+                    f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+
                 messagebox.showinfo(
                     "Éxito",
-                    "Todo el stock ha sido reseteado a 0 correctamente"
+                    "Todo el stock ha sido reseteado a 0 correctamente.\n\n"
+                    "✅ Se creó un backup automático antes de la operación.\n"
+                    "✅ La operación fue registrada en el log de auditoría."
                 )
             else:
+                logging.error("AUDITORÍA - Reseteo de stock FALLÓ")
                 messagebox.showerror("Error", "No se pudo resetear el stock")
 
             ventana_pass.destroy()
@@ -516,8 +541,21 @@ class InventarioWindow:
             self.menu_contextual.grab_release()
 
     def _exportar_a_excel(self):
-        """Exporta inventario completo a Excel"""
+        """
+        Exporta inventario completo a Excel
+        ✅ MEJORADO: Validación de datos antes de exportar
+        """
         try:
+            # ✅ VALIDACIÓN: Verificar que hay productos
+            productos = DatabaseManager.obtener_todos_productos()
+
+            if not productos:
+                messagebox.showwarning(
+                    "Inventario Vacío",
+                    "No hay productos en el inventario para exportar."
+                )
+                return
+
             ruta = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
                 filetypes=[("Archivos Excel", "*.xlsx")],
@@ -528,7 +566,6 @@ class InventarioWindow:
                 return
 
             # Obtener datos
-            productos = DatabaseManager.obtener_todos_productos()
             columnas = list(COLUMN_WIDTHS.keys())
 
             # Crear DataFrame
@@ -537,14 +574,22 @@ class InventarioWindow:
             # Exportar
             df.to_excel(ruta, index=False, sheet_name="Inventario")
 
-            messagebox.showinfo("Éxito", f"Inventario exportado correctamente:\n{ruta}")
+            messagebox.showinfo(
+                "✅ Exportación Exitosa",
+                f"Inventario exportado correctamente:\n\n"
+                f"{ruta}\n\n"
+                f"Total productos exportados: {len(productos)}"
+            )
 
         except Exception as e:
-            logging.error(f"Error al exportar a Excel: {e}")
+            logging.error(f"Error al exportar a Excel: {e}", exc_info=True)
             messagebox.showerror("Error", f"No se pudo exportar:\n{e}")
 
     def _actualizar_desde_excel(self):
-        """Actualiza precios desde archivo Excel"""
+        """
+        Actualiza precios desde archivo Excel
+        ✅ MEJORADO: Ventana de progreso real
+        """
         archivo = filedialog.askopenfilename(
             title="Seleccionar archivo Excel con precios",
             filetypes=[("Archivos Excel", "*.xlsx *.xls")]
@@ -553,32 +598,59 @@ class InventarioWindow:
         if not archivo:
             return
 
-        # Mostrar mensaje de progreso
-        messagebox.showinfo(
-            "Procesando",
-            "Procesando archivo Excel...\n\n"
-            "Este proceso puede tardar varios segundos.\n"
-            "Por favor espere."
+        # ✅ VENTANA DE PROGRESO REAL
+        ventana_progreso = Toplevel(self.window)
+        ventana_progreso.title("Procesando...")
+        ventana_progreso.geometry("400x100")
+        ventana_progreso.transient(self.window)
+        ventana_progreso.grab_set()
+
+        Label(
+            ventana_progreso,
+            text="Procesando archivo Excel...\nPor favor espere.",
+            font=FONT_STYLE
+        ).pack(pady=20)
+
+        # Barra de progreso indeterminada
+        from tkinter import ttk
+        progress = ttk.Progressbar(
+            ventana_progreso,
+            mode='indeterminate',
+            length=300
         )
+        progress.pack(pady=10)
+        progress.start(10)
 
-        # Actualizar
-        actualizados, insertados = InventarioController.actualizar_producto_desde_excel(archivo)
+        # Forzar actualización de la ventana
+        ventana_progreso.update()
 
-        if actualizados or insertados:
-            self._cargar_productos()
-            messagebox.showinfo(
-                "Actualización completada",
-                f"Productos actualizados: {actualizados}\n"
-                f"Productos insertados: {insertados}"
-            )
-        else:
-            messagebox.showwarning(
-                "Sin cambios",
-                "No se realizaron actualizaciones.\n\n"
-                "Verifica que el archivo contenga las columnas:\n"
-                "- EAN o Código de Barras\n"
-                "- Venta Real o Precio Compra"
-            )
+        # Actualizar en segundo plano
+        def actualizar():
+            actualizados, insertados = InventarioController.actualizar_producto_desde_excel(archivo)
+
+            # Cerrar ventana de progreso
+            progress.stop()
+            ventana_progreso.destroy()
+
+            if actualizados or insertados:
+                self._cargar_productos()
+                messagebox.showinfo(
+                    "✅ Actualización Completada",
+                    f"Productos actualizados: {actualizados}\n"
+                    f"Productos insertados: {insertados}\n\n"
+                    f"Total procesados: {actualizados + insertados}"
+                )
+            else:
+                messagebox.showwarning(
+                    "Sin Cambios",
+                    "No se realizaron actualizaciones.\n\n"
+                    "Verifica que el archivo contenga las columnas:\n"
+                    "- EAN o Código de Barras\n"
+                    "- Venta Real o Precio Compra"
+                )
+
+        # Ejecutar actualización después de un pequeño delay
+        self.window.after(100, actualizar)
 
     def _buscar_y_reemplazar(self):
         """Abre diálogo de búsqueda y reemplazo de precios"""

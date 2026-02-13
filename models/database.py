@@ -9,10 +9,24 @@ from typing import List, Optional, Tuple, Dict, Any
 from config.settings import DB_PATH
 
 # Configurar logging
+import os
+import logging
+
+# 📌 Ruta base del proyecto (carpeta raíz)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 📌 Carpeta logs en la raíz
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+
+# 📌 Crear carpeta logs si no existe
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "farmatrack.log")
+
 logging.basicConfig(
-    filename='logs/farmatrack.log',
+    filename=LOG_FILE,
     level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -69,7 +83,9 @@ class DatabaseManager:
                        LIMIT ?""",
                     (f"%{texto}%", f"%{texto}%", limit)
                 )
-                return cursor.fetchall()
+                # Convertir Row objects a tuplas simples
+                rows = cursor.fetchall()
+                return [tuple(row) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Error en búsqueda: {e}")
             return []
@@ -159,7 +175,9 @@ class DatabaseManager:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM productos")
-                return cursor.fetchall()
+                # Convertir Row objects a tuplas simples
+                rows = cursor.fetchall()
+                return [tuple(row) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Error al obtener productos: {e}")
             return []

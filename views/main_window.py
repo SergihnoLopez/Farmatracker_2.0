@@ -1,12 +1,12 @@
 """
 Ventana principal de la aplicación
+✅ ACTUALIZADO: Todas las funcionalidades conectadas
 """
 from tkinter import Tk, Frame, Label, Button, messagebox
 from tkinter import LEFT
 from PIL import Image, ImageTk
 from config.settings import FONT_STYLE, BG_COLOR, RESOURCES_DIR
 import logging
-from views.backup_window import BackupWindow
 
 
 class MainWindow:
@@ -57,17 +57,24 @@ class MainWindow:
         # Botones principales
         self._create_buttons()
 
-    def _abrir_gestion_backups(self):
-        """Abre la ventana de gestión de backups"""
-        BackupWindow(self.root)
-
     def _create_buttons(self):
         """Crea los botones del menú principal"""
+        # Importación condicional del módulo de backups
+        try:
+            from views.backup_window import BackupWindow
+            BACKUP_DISPONIBLE = True
+        except ImportError:
+            BACKUP_DISPONIBLE = False
+            logging.warning("Módulo de backups no disponible - funcionalidad deshabilitada")
+
         # Importar controladores aquí para evitar importación circular
         from views.venta_window import VentaWindow
         from views.inventario_window import InventarioWindow
         from views.pedidos_window import PedidosWindow
-        from views.backup_window import BackupWindow  # ← NUEVO
+        from views.agregar_producto_window import AgregarProductoWindow
+        from views.liquidador_window import LiquidadorWindow
+        from views.actualizador_window import ActualizadorWindow
+        from views.verificacion_window import VerificacionWindow
 
         frame_botones1 = Frame(self.main_frame, bg=BG_COLOR)
         frame_botones1.pack()
@@ -75,7 +82,7 @@ class MainWindow:
         botones1 = [
             ("Registrar Venta", lambda: VentaWindow(self.root), "#3485e2"),
             ("Ver Inventario", lambda: InventarioWindow(self.root), "#3ec4ed"),
-            ("Agregar Producto", self._abrir_agregar_producto, "#63cafe"),
+            ("Agregar Producto", lambda: AgregarProductoWindow(self.root), "#63cafe"),
             ("Módulo de Pedidos", lambda: PedidosWindow(self.root), "#c288e2")
         ]
 
@@ -95,11 +102,14 @@ class MainWindow:
         frame_botones2.pack(pady=10)
 
         botones2 = [
-            ("Liquidador", self._abrir_liquidador, "#c288e2"),
-            ("Actualizar Inventario", self._abrir_actualizar_inventario, "#3485e2"),
-            ("Verificación Rápida", self._abrir_verificacion_rapida, "#3ec4ed"),
-            ("💾 Gestión de Backups", self._abrir_gestion_backups, "#4CAF50")  # ← NUEVO
+            ("Liquidador", lambda: LiquidadorWindow(self.root), "#c288e2"),
+            ("Actualizar Inventario", lambda: ActualizadorWindow(self.root), "#3485e2"),
+            ("Verificación Rápida", lambda: VerificacionWindow(self.root), "#3ec4ed")
         ]
+
+        # Solo agregar botón de backups si está disponible
+        if BACKUP_DISPONIBLE:
+            botones2.append(("💾 Gestión de Backups", lambda: BackupWindow(self.root), "#4CAF50"))
 
         for texto, comando, color in botones2:
             Button(
@@ -112,12 +122,6 @@ class MainWindow:
                 width=20,
                 height=2
             ).pack(side=LEFT, padx=10)
-
-    # Al final de la clase, agregar el método handler:
-
-    def _abrir_gestion_backups(self):
-        """Abre la ventana de gestión de backups"""
-        BackupWindow(self.root)
 
     def _load_animation(self):
         """Carga y reproduce la animación GIF"""
@@ -166,19 +170,6 @@ class MainWindow:
             except:
                 pass
         self.root.destroy()
-
-    # Métodos placeholder para funcionalidades pendientes
-    def _abrir_agregar_producto(self):
-        messagebox.showinfo("Info", "Función en desarrollo")
-
-    def _abrir_liquidador(self):
-        messagebox.showinfo("Info", "Función en desarrollo")
-
-    def _abrir_actualizar_inventario(self):
-        messagebox.showinfo("Info", "Función en desarrollo")
-
-    def _abrir_verificacion_rapida(self):
-        messagebox.showinfo("Info", "Función en desarrollo")
 
     def run(self):
         """Inicia el bucle principal"""
