@@ -1,5 +1,6 @@
 """
 Controlador de lógica de pedidos
+✅ MEJORADO: Integración con extractor SIP
 """
 from tkinter import messagebox, filedialog
 from models.database import DatabaseManager, get_db_connection
@@ -76,12 +77,121 @@ class PedidosController:
                         'cantidad': cantidad,
                         'precio_compra': producto['precio_compra']
                     })
+                else:
+                    # Producto no encontrado - agregarlo sin descripción
+                    productos.append({
+                        'codigo': codigo,
+                        'descripcion': f"Producto {codigo}",
+                        'cantidad': cantidad,
+                        'precio_compra': 0.0
+                    })
 
             return productos
 
         except Exception as e:
             logging.error(f"Error al cargar Excel: {e}")
             messagebox.showerror("Error", f"No se pudo procesar el archivo:\n{e}")
+            return []
+
+    @staticmethod
+    def cargar_pedido_desde_sip_pdf(archivo_path: str) -> list:
+        """
+        ✅ NUEVO: Carga productos desde factura PDF de SIP Asociados
+
+        Args:
+            archivo_path: Ruta al PDF de SIP
+
+        Returns:
+            Lista de productos extraídos con descripción desde BD
+        """
+        productos = []
+
+        try:
+            # Importar extractor
+            from utils.sip_extractor import SIPExtractor
+
+            # Validar que sea un PDF SIP
+            if not SIPExtractor.validar_pdf_sip(archivo_path):
+                respuesta = messagebox.askyesno(
+                    "Validación de PDF",
+                    "El archivo no parece ser una factura de SIP Asociados.\n\n"
+                    "¿Desea continuar de todas formas?"
+                )
+                if not respuesta:
+                    return []
+
+            # Extraer datos
+            datos_extraidos = SIPExtractor.extraer_desde_pdf(archivo_path)
+
+            if not datos_extraidos:
+                messagebox.showwarning(
+                    "Sin Datos",
+                    "No se encontraron productos en el PDF.\n\n"
+                    "Asegúrese de que:\n"
+                    "• El PDF sea una factura de SIP Asociados\n"
+                    "• Contenga una tabla con productos\n"
+                    "• No sea un PDF escaneado"
+                )
+                return []
+
+            # Mostrar reporte de extracción
+            from utils.sip_extractor import SIPExtractor
+            reporte = SIPExtractor.generar_reporte_extraccion(datos_extraidos)
+            logging.info(f"Extracción SIP:\n{reporte}")
+
+            # Buscar productos en BD
+            encontrados = 0
+            no_encontrados = 0
+
+            for item in datos_extraidos:
+                codigo = item['Código de Barras']
+                cantidad = int(item['Cantidad'])
+
+                # Buscar en inventario
+                producto = DatabaseManager.buscar_producto_por_codigo(codigo)
+
+                if producto:
+                    productos.append({
+                        'codigo': codigo,
+                        'descripcion': producto['descripcion'],
+                        'cantidad': cantidad,
+                        'precio_compra': producto['precio_compra']
+                    })
+                    encontrados += 1
+                else:
+                    # Producto no en inventario
+                    productos.append({
+                        'codigo': codigo,
+                        'descripcion': f"⚠️ Nuevo: {codigo}",
+                        'cantidad': cantidad,
+                        'precio_compra': 0.0
+                    })
+                    no_encontrados += 1
+
+            # Mensaje informativo
+            mensaje = f"✅ Extracción completada\n\n"
+            mensaje += f"Total productos: {len(productos)}\n"
+            mensaje += f"En inventario: {encontrados}\n"
+            mensaje += f"Nuevos/No encontrados: {no_encontrados}\n\n"
+
+            if no_encontrados > 0:
+                mensaje += "⚠️ Los productos nuevos tienen precio $0 y se marcan con ⚠️"
+
+            messagebox.showinfo("Extracción SIP Completada", mensaje)
+
+            return productos
+
+        except ImportError:
+            messagebox.showerror(
+                "Módulo No Disponible",
+                "El extractor SIP requiere el módulo 'pdfplumber'.\n\n"
+                "Instale con:\n"
+                "pip install pdfplumber"
+            )
+            return []
+        except Exception as e:
+            logging.error(f"Error al procesar PDF SIP: {e}", exc_info=True)
+            messagebox.showerror("Error", f"No se pudo procesar el PDF:\n{e}")
             return []
 
     @staticmethod

@@ -1,5 +1,6 @@
 """
 Ventana de módulo de pedidos
+✅ MEJORADO: Integración con extractor SIP
 """
 from tkinter import (Toplevel, Frame, Label, Entry, Button, Menu,
                      messagebox, END, W, BOTH, LEFT, RIGHT, Y)
@@ -111,8 +112,16 @@ class PedidosWindow:
         self._crear_menu_opciones()
 
     def _crear_menu_opciones(self):
-        """Crea el menú de opciones (engranaje)"""
+        """Crea el menú de opciones (engranaje) con integración SIP"""
         self.menu_opciones = Menu(self.window, tearoff=0)
+
+        # ✅ NUEVO: Separar opciones de carga en una sección
+        self.menu_opciones.add_command(
+            label="📄 Cargar desde PDF SIP Asociados",
+            command=self._cargar_desde_sip_pdf
+        )
+        self.menu_opciones.add_separator()
+
         self.menu_opciones.add_command(label="Cargar desde Excel (SIP)", command=self._cargar_desde_excel)
         self.menu_opciones.add_command(label="Cargar desde TXT", command=self._cargar_desde_txt)
         self.menu_opciones.add_separator()
@@ -256,6 +265,79 @@ class PedidosWindow:
 
         return productos
 
+    def _cargar_desde_sip_pdf(self):
+        """
+        ✅ NUEVO: Carga pedido desde PDF de SIP Asociados
+        """
+        from tkinter import filedialog
+
+        archivo = filedialog.askopenfilename(
+            title="Seleccionar factura PDF de SIP Asociados",
+            filetypes=[("Archivos PDF", "*.pdf")]
+        )
+
+        if not archivo:
+            return
+
+        try:
+            # Mostrar ventana de progreso
+            ventana_progreso = Toplevel(self.window)
+            ventana_progreso.title("Procesando PDF SIP...")
+            ventana_progreso.geometry("400x150")
+            ventana_progreso.transient(self.window)
+            ventana_progreso.grab_set()
+
+            Label(
+                ventana_progreso,
+                text="Extrayendo datos del PDF de SIP Asociados...\n\n"
+                     "Por favor espere, esto puede tomar unos momentos.",
+                font=FONT_STYLE,
+                justify="center"
+            ).pack(pady=20)
+
+            # Barra de progreso
+            from tkinter import ttk
+            progress = ttk.Progressbar(
+                ventana_progreso,
+                mode='indeterminate',
+                length=300
+            )
+            progress.pack(pady=10)
+            progress.start(10)
+
+            # Forzar actualización
+            ventana_progreso.update()
+
+            # Procesar en segundo plano
+            def procesar():
+                productos = PedidosController.cargar_pedido_desde_sip_pdf(archivo)
+
+                # Cerrar ventana de progreso
+                progress.stop()
+                ventana_progreso.destroy()
+
+                if productos:
+                    # Limpiar pedido actual
+                    for item in self.tree_pedido.get_children():
+                        self.tree_pedido.delete(item)
+
+                    # Agregar productos
+                    for prod in productos:
+                        self.tree_pedido.insert("", "end", values=(
+                            prod['codigo'],
+                            prod['descripcion'],
+                            prod['cantidad'],
+                            format_precio_display(prod['precio_compra'])
+                        ))
+
+                    self._actualizar_costo_total()
+
+            # Ejecutar después de un pequeño delay
+            self.window.after(100, procesar)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar PDF SIP:\n{e}")
+
     def _cargar_desde_excel(self):
         """Carga pedido desde Excel"""
         from tkinter import filedialog
@@ -270,16 +352,17 @@ class PedidosWindow:
 
         productos = PedidosController.cargar_pedido_desde_excel(archivo)
 
-        for prod in productos:
-            self.tree_pedido.insert("", "end", values=(
-                prod['codigo'],
-                prod['descripcion'],
-                prod['cantidad'],
-                format_precio_display(prod['precio_compra'])
-            ))
+        if productos:
+            for prod in productos:
+                self.tree_pedido.insert("", "end", values=(
+                    prod['codigo'],
+                    prod['descripcion'],
+                    prod['cantidad'],
+                    format_precio_display(prod['precio_compra'])
+                ))
 
-        self._actualizar_costo_total()
-        messagebox.showinfo("Éxito", f"{len(productos)} productos cargados")
+            self._actualizar_costo_total()
+            messagebox.showinfo("Éxito", f"{len(productos)} productos cargados")
 
     def _cargar_desde_txt(self):
         """Carga pedido desde TXT"""
@@ -295,16 +378,17 @@ class PedidosWindow:
 
         productos = PedidosController.cargar_pedido_desde_txt(archivo)
 
-        for prod in productos:
-            self.tree_pedido.insert("", "end", values=(
-                prod['codigo'],
-                prod['descripcion'],
-                prod['cantidad'],
-                format_precio_display(prod['precio_compra'])
-            ))
+        if productos:
+            for prod in productos:
+                self.tree_pedido.insert("", "end", values=(
+                    prod['codigo'],
+                    prod['descripcion'],
+                    prod['cantidad'],
+                    format_precio_display(prod['precio_compra'])
+                ))
 
-        self._actualizar_costo_total()
-        messagebox.showinfo("Éxito", f"{len(productos)} productos cargados")
+            self._actualizar_costo_total()
+            messagebox.showinfo("Éxito", f"{len(productos)} productos cargados")
 
     def _exportar_pdf(self):
         """Exporta pedido a PDF"""

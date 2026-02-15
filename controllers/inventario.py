@@ -1,5 +1,7 @@
 """
 Controlador de lógica de inventario
+✅ CORREGIDO: Actualización desde Excel con mapeo correcto
+✅ CORREGIDO: Soporte para archivos .xls y .xlsx
 """
 from tkinter import messagebox
 from models.database import DatabaseManager, get_db_connection
@@ -75,89 +77,214 @@ class InventarioController:
     @staticmethod
     def actualizar_producto_desde_excel(archivo_path: str) -> tuple:
         """
-        Actualiza precios desde archivo Excel
-        Returns: (actualizados, insertados)
+        ✅ CORREGIDO: Actualiza productos desde archivo Excel con mapeo correcto
+        ✅ CORREGIDO: Soporte para archivos .xls (antiguos) y .xlsx (modernos)
+
+        Mapeo Excel → Base de datos:
+        - EAN → codigo_barras
+        - Denominación → descripcion
+        - Cantidad → cantidad
+        - Venta Real → precio_compra
+        - Impuesto → impuesto
+        - Grupo → grupo
+        - SubGrupo → subgrupo
+        - Proveedor → proveedor
+        - UND → unidad
+        - % Boni → bonificacion
+
+        Lógica:
+        - Si EAN existe: actualizar solo descripcion y precio_compra
+        - Si EAN NO existe: insertar con todos los campos
+
+        Returns: (actualizados, insertados, errores)
         """
         try:
-            df = pd.read_excel(archivo_path, dtype=str)
+            # ✅ DETECTAR FORMATO Y LEER CON ENGINE CORRECTO
+            import os
+            extension = os.path.splitext(archivo_path)[1].lower()
 
-            # Normalizar nombres de columnas
-            cols_norm = {c.lower().strip(): c for c in df.columns}
+            if extension == '.xls':
+                # Archivo .xls antiguo - intentar convertir o leer con xlrd si está disponible
+                try:
+                    # Intentar con xlrd si está instalado
+                    df = pd.read_excel(archivo_path, dtype=str, engine='xlrd')
+                    logging.info("Archivo .xls leído con xlrd")
+                except ImportError:
+                    # xlrd no disponible - sugerir conversión
+                    messagebox.showerror(
+                        "Formato No Soportado",
+                        "El archivo es formato .xls (Excel antiguo).\n\n"
+                        "Por favor:\n"
+                        "1. Abra el archivo en Excel\n"
+                        "2. Guárdelo como .xlsx (Excel moderno)\n"
+                        "3. Intente de nuevo\n\n"
+                        "O instale xlrd:\n"
+                        "pip install xlrd"
+                    )
+                    logging.error("Archivo .xls pero xlrd no está instalado")
+                    return (0, 0, 0)
+            elif extension == '.xlsx':
+                # Archivo .xlsx moderno - usar openpyxl (ya instalado)
+                df = pd.read_excel(archivo_path, dtype=str, engine='openpyxl')
+                logging.info("Archivo .xlsx leído con openpyxl")
+            else:
+                messagebox.showerror(
+                    "Formato Desconocido",
+                    f"Formato de archivo no soportado: {extension}\n\n"
+                    "Use archivos .xlsx o .xls"
+                )
+                return (0, 0, 0)
 
-            def get_col(candidatos):
-                for cand in candidatos:
-                    key = cand.lower().strip()
-                    if key in cols_norm:
-                        return cols_norm[key]
-                for key, orig in cols_norm.items():
-                    for cand in candidatos:
-                        if cand.lower().strip() in key:
-                            return orig
-                return None
+            logging.info(f"Columnas encontradas en Excel: {list(df.columns)}")
 
-            # Buscar columnas necesarias
-            ean_col = get_col(["ean", "codigo de barras", "codigo_barras"])
-            venta_col = get_col(["venta real", "ventareal", "precio compra", "precio_compra"])
-            boni_col = get_col(["% boni", "bonificacion", "boni"])
-            desc_col = get_col(["denominación", "descripcion"])
-            prov_col = get_col(["proveedor"])
-            und_col = get_col(["und", "unidad"])
+            # Normalizar nombres de columnas (quitar espacios, minúsculas)
+            df.columns = df.columns.str.strip()
 
-            if not ean_col or not venta_col:
-                messagebox.showerror("Error", "No se encontraron las columnas 'EAN' y 'Precio'")
-                return (0, 0)
+            # Verificar columnas obligatorias
+            columnas_requeridas = ['EAN', 'Denominación', 'Venta Real']
+            columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+
+            if columnas_faltantes:
+                messagebox.showerror(
+                    "Error",
+                    f"Columnas faltantes en el Excel:\n{', '.join(columnas_faltantes)}\n\n"
+                    f"Columnas requeridas: {', '.join(columnas_requeridas)}"
+                )
+                return (0, 0, 0)
 
             # Limpiar códigos de barras
-            df[ean_col] = df[ean_col].apply(clean_codigo_barras)
+            df['EAN'] = df['EAN'].apply(clean_codigo_barras)
 
-            # Convertir precios
-            df[venta_col] = df[venta_col].apply(parse_precio_text)
-            if boni_col:
-                df[boni_col] = df[boni_col].apply(parse_precio_text)
+            # Filtrar filas con EAN vacío
+            df = df[df['EAN'].notna()]
+            df = df[df['EAN'] != '']
 
-            # Filtrar precios válidos
-            df = df[df[venta_col].notna()]
-            df = df[df[venta_col] >= 0]
-            df = df.drop_duplicates(subset=[ean_col], keep="first")
+            # Convertir precios y números
+            df['Venta Real'] = df['Venta Real'].apply(parse_precio_text)
+
+            # Convertir cantidad a entero
+            if 'Cantidad' in df.columns:
+                df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0).astype(int)
+
+            # Convertir bonificación
+            if '% Boni' in df.columns:
+                df['% Boni'] = df['% Boni'].apply(parse_precio_text)
+
+            # Filtrar filas con precio válido
+            df = df[df['Venta Real'].notna()]
+            df = df[df['Venta Real'] >= 0]
+
+            # Eliminar duplicados (mantener el primero)
+            df = df.drop_duplicates(subset=['EAN'], keep='first')
+
+            logging.info(f"Filas válidas a procesar: {len(df)}")
 
             actualizados = 0
             insertados = 0
+            errores = 0
 
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                for _, fila in df.iterrows():
-                    ean = str(fila[ean_col])
-                    precio = float(fila[venta_col])
-                    bonificacion = float(fila[boni_col]) if boni_col and pd.notna(fila[boni_col]) else 0
-                    descripcion = str(fila[desc_col]) if desc_col and pd.notna(fila[desc_col]) else ""
-                    proveedor = str(fila[prov_col]) if prov_col and pd.notna(fila[prov_col]) else ""
-                    unidad = str(fila[und_col]) if und_col and pd.notna(fila[und_col]) else ""
+                for idx, fila in df.iterrows():
+                    try:
+                        # Extraer datos con mapeo correcto
+                        ean = str(fila['EAN']).strip()
+                        denominacion = str(fila.get('Denominación', '')).strip() if pd.notna(fila.get('Denominación')) else ''
+                        venta_real = float(fila['Venta Real'])
 
-                    # Verificar si existe
-                    cursor.execute("SELECT id_producto FROM productos WHERE codigo_barras = ?", (ean,))
-                    existe = cursor.fetchone()
+                        # Campos opcionales
+                        cantidad = int(fila.get('Cantidad', 0)) if 'Cantidad' in fila and pd.notna(fila.get('Cantidad')) else 0
+                        proveedor = str(fila.get('Proveedor', '')).strip() if pd.notna(fila.get('Proveedor')) else ''
+                        unidad = str(fila.get('UND', '')).strip() if pd.notna(fila.get('UND')) else ''
+                        impuesto = str(fila.get('Impuesto', '')).strip() if pd.notna(fila.get('Impuesto')) else ''
+                        bonificacion = float(fila.get('% Boni', 0)) if '% Boni' in fila and pd.notna(fila.get('% Boni')) else 0
+                        grupo = str(fila.get('Grupo', '')).strip() if pd.notna(fila.get('Grupo')) else ''
+                        subgrupo = str(fila.get('SubGrupo', '')).strip() if pd.notna(fila.get('SubGrupo')) else ''
 
-                    if existe:
+                        # Validar EAN
+                        if not ean or len(ean) < 8:
+                            logging.warning(f"Fila {idx}: EAN inválido '{ean}', omitiendo")
+                            errores += 1
+                            continue
+
+                        # Verificar si existe
                         cursor.execute(
-                            "UPDATE productos SET precio_compra = ?, bonificacion = ? WHERE codigo_barras = ?",
-                            (precio, bonificacion, ean)
+                            "SELECT id_producto FROM productos WHERE codigo_barras = ?",
+                            (ean,)
                         )
-                        actualizados += 1
-                    else:
-                        cursor.execute("""
-                            INSERT INTO productos 
-                            (codigo_barras, descripcion, proveedor, unidad, cantidad, precio_compra, precio_venta, bonificacion)
-                            VALUES (?, ?, ?, ?, 0, ?, ?, ?)
-                        """, (ean, descripcion, proveedor, unidad, precio, precio, bonificacion))
-                        insertados += 1
+                        existe = cursor.fetchone()
 
-            return (actualizados, insertados)
+                        if existe:
+                            # ✅ SI EXISTE: Actualizar SOLO descripcion y precio_compra
+                            cursor.execute("""
+                                UPDATE productos 
+                                SET descripcion = ?,
+                                    precio_compra = ?
+                                WHERE codigo_barras = ?
+                            """, (denominacion, venta_real, ean))
+
+                            actualizados += 1
+                            logging.debug(f"Actualizado: {ean} - {denominacion}")
+
+                        else:
+                            # ✅ NO EXISTE: Insertar con todos los campos
+                            cursor.execute("""
+                                INSERT INTO productos 
+                                (codigo_barras, descripcion, proveedor, unidad, cantidad,
+                                 precio_compra, precio_venta, impuesto, bonificacion, 
+                                 grupo, subgrupo)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                ean,
+                                denominacion,
+                                proveedor,
+                                unidad,
+                                cantidad,
+                                venta_real,
+                                venta_real,  # precio_venta = precio_compra inicialmente
+                                impuesto,
+                                bonificacion,
+                                grupo,
+                                subgrupo
+                            ))
+
+                            insertados += 1
+                            logging.debug(f"Insertado: {ean} - {denominacion}")
+
+                    except Exception as e:
+                        logging.error(f"Error en fila {idx} (EAN: {ean if 'ean' in locals() else 'N/A'}): {e}")
+                        errores += 1
+                        continue
+
+                # Confirmar transacción
+                conn.commit()
+
+            # Mostrar resumen
+            mensaje_resumen = (
+                f"✅ Actualización completada\n\n"
+                f"📊 Resumen:\n"
+                f"  • Productos actualizados: {actualizados}\n"
+                f"  • Productos insertados: {insertados}\n"
+                f"  • Errores: {errores}\n"
+                f"  • Total procesado: {actualizados + insertados}"
+            )
+
+            logging.info(f"Resumen actualización Excel: {actualizados} actualizados, {insertados} insertados, {errores} errores")
+
+            messagebox.showinfo("Actualización Completada", mensaje_resumen)
+
+            return (actualizados, insertados, errores)
+
+        except FileNotFoundError:
+            logging.error(f"Archivo no encontrado: {archivo_path}")
+            messagebox.showerror("Error", f"Archivo no encontrado:\n{archivo_path}")
+            return (0, 0, 0)
 
         except Exception as e:
-            logging.error(f"Error al actualizar desde Excel: {e}")
-            messagebox.showerror("Error", f"No se pudo procesar el archivo:\n{e}")
-            return (0, 0)
+            logging.error(f"Error al actualizar desde Excel: {e}", exc_info=True)
+            messagebox.showerror("Error", f"No se pudo procesar el archivo:\n\n{str(e)}")
+            return (0, 0, 0)
 
     @staticmethod
     def buscar_y_reemplazar_precios(texto_busqueda: str, nuevo_precio_compra: str, nuevo_precio_venta: str) -> int:
