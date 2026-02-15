@@ -1,6 +1,7 @@
 """
 Ventana principal de la aplicación
 ✅ ACTUALIZADO: Todas las funcionalidades conectadas
+✅ MEJORADO: Animación GIF optimizada con mejor rendimiento
 """
 from tkinter import Tk, Frame, Label, Button, messagebox
 from tkinter import LEFT
@@ -20,6 +21,8 @@ class MainWindow:
 
         self.after_id = None
         self.gif_frames = []
+        self.frame_delays = []  # ✅ NUEVO: Guardar delay de cada frame
+        self.current_frame = 0
 
         self._setup_ui()
         self._load_animation()
@@ -124,32 +127,86 @@ class MainWindow:
             ).pack(side=LEFT, padx=10)
 
     def _load_animation(self):
-        """Carga y reproduce la animación GIF"""
+        """
+        Carga y reproduce la animación GIF
+        ✅ MEJORADO: Extrae delay de cada frame del GIF
+        """
         gif_path = RESOURCES_DIR / "animacion.gif"
 
         try:
             gif = Image.open(gif_path)
 
-            # Extraer frames
+            # ✅ NUEVO: Extraer frames y delays individuales
+            frame_index = 0
             while True:
                 try:
+                    gif.seek(frame_index)
+
+                    # Obtener delay del frame actual (en milisegundos)
+                    # El GIF almacena el delay en la key 'duration'
+                    try:
+                        delay = gif.info.get('duration', 50)  # Default 50ms si no hay info
+                    except:
+                        delay = 50
+
+                    # Asegurar delay mínimo de 20ms (50fps máximo) para fluidez
+                    delay = max(20, delay)
+
+                    # Redimensionar y convertir frame
                     frame_img = gif.copy().resize((300, 300), Image.LANCZOS)
                     frame_tk = ImageTk.PhotoImage(frame_img)
+
                     self.gif_frames.append(frame_tk)
-                    gif.seek(len(self.gif_frames))
+                    self.frame_delays.append(delay)
+
+                    frame_index += 1
+
                 except EOFError:
                     break
 
-            # Iniciar animación
+            # Iniciar animación si hay frames
             if self.gif_frames:
-                self._update_gif(0)
+                logging.info(f"GIF cargado: {len(self.gif_frames)} frames")
+                self._update_gif_optimized(0)
+            else:
+                logging.warning("No se pudieron extraer frames del GIF")
 
         except FileNotFoundError:
             logging.warning(f"Archivo de animación no encontrado: {gif_path}")
             # Continuar sin animación
+        except Exception as e:
+            logging.error(f"Error al cargar GIF: {e}", exc_info=True)
+
+    def _update_gif_optimized(self, index):
+        """
+        ✅ NUEVO: Actualiza el frame del GIF usando delay específico de cada frame
+        Esto respeta el timing original del GIF para animaciones más fluidas
+        """
+        # Verificar que la ventana sigue existiendo
+        if not self.gif_label.winfo_exists():
+            return
+
+        if self.gif_frames:
+            # Mostrar frame actual
+            frame = self.gif_frames[index]
+            self.gif_label.config(image=frame)
+
+            # Obtener delay para este frame específico
+            delay = self.frame_delays[index]
+
+            # Programar siguiente frame
+            next_index = (index + 1) % len(self.gif_frames)
+            self.after_id = self.root.after(
+                delay,
+                self._update_gif_optimized,
+                next_index
+            )
 
     def _update_gif(self, index):
-        """Actualiza el frame del GIF"""
+        """
+        ⚠️ DEPRECADO: Método antiguo - mantener por compatibilidad
+        Usar _update_gif_optimized en su lugar
+        """
         if not self.gif_label.winfo_exists():
             return
 

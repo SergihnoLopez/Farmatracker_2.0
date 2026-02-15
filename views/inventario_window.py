@@ -1,11 +1,12 @@
 """
 Ventana de gestión de inventario
-✅ MEJORADO: Bugs corregidos + Registro de auditoría
+✅ CORREGIDO: Alineación correcta de columnas en Treeview
+✅ CORREGIDO: Orden consistente entre SELECT, columnas y valores
 """
 from tkinter import (Toplevel, Frame, Label, Entry, Button, Menu, END, W,
                      messagebox, filedialog, Scrollbar, BOTH, LEFT, RIGHT, Y, VERTICAL)
 from tkinter import ttk
-from config.settings import FONT_STYLE, BTN_COLOR, BTN_FG, COLUMN_WIDTHS
+from config.settings import FONT_STYLE, BTN_COLOR, BTN_FG
 from models.database import DatabaseManager, get_db_connection
 from controllers.inventario import InventarioController
 from utils.validators import sanitize_sql_column, validate_precio
@@ -42,7 +43,7 @@ class InventarioWindow:
         self.search_entry = Entry(search_frame, font=FONT_STYLE)
         self.search_entry.pack(side=LEFT, expand=True, fill='x', padx=5)
         self.search_entry.bind("<Return>", lambda e: self._buscar())
-        self.search_entry.focus()  # Foco inicial en búsqueda
+        self.search_entry.focus()
 
         # Botón Buscar
         Button(
@@ -90,30 +91,78 @@ class InventarioWindow:
 
         # ============================================================
         # FRAME TABLA CON SCROLLBAR
+        # ✅ CORREGIDO: Orden de columnas consistente
         # ============================================================
         frame_tabla = Frame(self.window)
         frame_tabla.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # Configurar columnas
-        columnas = list(COLUMN_WIDTHS.keys())
+        # ✅ DEFINICIÓN CORRECTA DE COLUMNAS (orden específico)
+        columnas = (
+            "id_producto",
+            "codigo_barras",
+            "descripcion",
+            "cantidad",
+            "proveedor",
+            "precio_compra",
+            "precio_venta",
+            "unidad",
+            "impuesto",
+            "bonificacion",
+            "grupo",
+            "subgrupo",
+            "fecha_vencimiento"
+        )
 
         # Crear Treeview
         self.tree = ttk.Treeview(frame_tabla, columns=columnas, show="headings")
 
-        # Configurar encabezados y anchos
+        # ✅ Configurar encabezados con nombres legibles
+        nombres_columnas = {
+            "id_producto": "ID",
+            "codigo_barras": "Código",
+            "descripcion": "Descripción",
+            "cantidad": "Cantidad",
+            "proveedor": "Proveedor",
+            "precio_compra": "P. Compra",
+            "precio_venta": "P. Venta",
+            "unidad": "UND",
+            "impuesto": "Impuesto",
+            "bonificacion": "Boni",
+            "grupo": "Grupo",
+            "subgrupo": "Subgrupo",
+            "fecha_vencimiento": "Vencimiento"
+        }
+
+        # ✅ Anchos optimizados
+        anchos_columnas = {
+            "id_producto": 60,
+            "codigo_barras": 100,
+            "descripcion": 290,
+            "cantidad": 70,
+            "proveedor": 150,
+            "precio_compra": 90,
+            "precio_venta": 90,
+            "unidad": 50,
+            "impuesto": 80,
+            "bonificacion": 60,
+            "grupo": 120,
+            "subgrupo": 120,
+            "fecha_vencimiento": 100
+        }
+
         for col in columnas:
             self.tree.heading(
                 col,
-                text=col.replace("_", " ").title(),
+                text=nombres_columnas.get(col, col),
                 command=lambda _col=col: self._ordenar_columna(_col)
             )
             self.tree.column(
                 col,
-                width=COLUMN_WIDTHS[col],
+                width=anchos_columnas.get(col, 100),
                 anchor='w'
             )
 
-        # Scrollbar vertical (gruesa para mejor visibilidad)
+        # Scrollbar vertical
         scrollbar_y = Scrollbar(
             frame_tabla,
             orient=VERTICAL,
@@ -130,9 +179,9 @@ class InventarioWindow:
         scrollbar_y.pack(side=RIGHT, fill=Y)
 
         # Scroll con rueda del mouse
-        self.tree.bind("<MouseWheel>", self._scroll_mouse)  # Windows
-        self.tree.bind("<Button-4>", lambda e: self.tree.yview_scroll(-1, "units"))  # Linux
-        self.tree.bind("<Button-5>", lambda e: self.tree.yview_scroll(1, "units"))  # Linux
+        self.tree.bind("<MouseWheel>", self._scroll_mouse)
+        self.tree.bind("<Button-4>", lambda e: self.tree.yview_scroll(-1, "units"))
+        self.tree.bind("<Button-5>", lambda e: self.tree.yview_scroll(1, "units"))
 
         # ============================================================
         # FRAME TOTAL CON BOTÓN ACTUALIZAR
@@ -175,8 +224,6 @@ class InventarioWindow:
         # Variable para control de orden
         self.orden_columnas = {}
 
-
-
     def _setup_context_menu(self):
         """Configura menú de clic derecho"""
         self.menu_contextual = Menu(self.window, tearoff=0)
@@ -191,16 +238,50 @@ class InventarioWindow:
         self.tree.bind("<Button-3>", self._mostrar_menu_contextual)
 
     def _cargar_productos(self):
-        """Carga todos los productos en el treeview"""
-        productos = DatabaseManager.obtener_todos_productos()
-
+        """
+        ✅ CORREGIDO: Carga productos con SELECT en el orden correcto
+        """
         # Limpiar treeview
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        # Insertar productos
-        for producto in productos:
-            self.tree.insert("", "end", values=producto)
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # ✅ SELECT EN EL ORDEN EXACTO DE LAS COLUMNAS DEL TREEVIEW
+                cursor.execute("""
+                    SELECT 
+                        id_producto,
+                        codigo_barras,
+                        descripcion,
+                        cantidad,
+                        proveedor,
+                        precio_compra,
+                        precio_venta,
+                        unidad,
+                        impuesto,
+                        bonificacion,
+                        grupo,
+                        subgrupo,
+                        fecha_vencimiento
+                    FROM productos
+                    ORDER BY id_producto
+                """)
+
+                productos = cursor.fetchall()
+
+                # ✅ Insertar productos (el orden ya coincide)
+                for producto in productos:
+                    # Convertir Row a tupla
+                    valores = tuple(producto)
+                    self.tree.insert("", "end", values=valores)
+
+                logging.info(f"Cargados {len(productos)} productos en inventario")
+
+        except Exception as e:
+            logging.error(f"Error al cargar productos: {e}", exc_info=True)
+            messagebox.showerror("Error", f"Error al cargar inventario:\n{e}")
 
         # Actualizar total
         self._actualizar_total()
@@ -217,14 +298,30 @@ class InventarioWindow:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # Buscar en todas las columnas
-                columnas = list(COLUMN_WIDTHS.keys())
-                condiciones = " OR ".join([f"LOWER({col}) LIKE ?" for col in columnas])
-
-                cursor.execute(
-                    f"SELECT * FROM productos WHERE {condiciones}",
-                    tuple(f"%{consulta}%" for _ in columnas)
-                )
+                # ✅ SELECT EN EL ORDEN CORRECTO
+                cursor.execute("""
+                    SELECT 
+                        id_producto,
+                        codigo_barras,
+                        descripcion,
+                        cantidad,
+                        proveedor,
+                        precio_compra,
+                        precio_venta,
+                        unidad,
+                        impuesto,
+                        bonificacion,
+                        grupo,
+                        subgrupo,
+                        fecha_vencimiento
+                    FROM productos
+                    WHERE LOWER(codigo_barras) LIKE ?
+                       OR LOWER(descripcion) LIKE ?
+                       OR LOWER(proveedor) LIKE ?
+                       OR LOWER(grupo) LIKE ?
+                       OR LOWER(subgrupo) LIKE ?
+                """, (f"%{consulta}%", f"%{consulta}%", f"%{consulta}%",
+                      f"%{consulta}%", f"%{consulta}%"))
 
                 resultados = cursor.fetchall()
 
@@ -232,9 +329,10 @@ class InventarioWindow:
                 for item in self.tree.get_children():
                     self.tree.delete(item)
 
-                # Convertir Row objects a tuplas antes de insertar
+                # ✅ Insertar resultados (orden correcto)
                 for producto in resultados:
-                    self.tree.insert("", "end", values=tuple(producto))
+                    valores = tuple(producto)
+                    self.tree.insert("", "end", values=valores)
 
                 if not resultados:
                     messagebox.showinfo("Sin resultados", "No se encontraron productos")
@@ -302,7 +400,24 @@ class InventarioWindow:
 
         # Obtener índice de columna
         col_num = int(col.replace("#", "")) - 1
-        columnas = list(COLUMN_WIDTHS.keys())
+
+        # ✅ Lista de columnas en el orden correcto
+        columnas = [
+            "id_producto",
+            "codigo_barras",
+            "descripcion",
+            "cantidad",
+            "proveedor",
+            "precio_compra",
+            "precio_venta",
+            "unidad",
+            "impuesto",
+            "bonificacion",
+            "grupo",
+            "subgrupo",
+            "fecha_vencimiento"
+        ]
+
         nombre_col = columnas[col_num]
 
         # No permitir editar ID ni código de barras
@@ -437,10 +552,7 @@ class InventarioWindow:
                 messagebox.showerror("Error", "No se pudo eliminar el producto")
 
     def _resetear_stock(self):
-        """
-        Resetea todo el stock a 0 (requiere contraseña)
-        ✅ MEJORADO: Registra en log de auditoría
-        """
+        """Resetea todo el stock a 0 (requiere contraseña)"""
         # Ventana de contraseña
         ventana_pass = Toplevel(self.window)
         ventana_pass.title("Confirmación requerida")
@@ -461,7 +573,6 @@ class InventarioWindow:
         def confirmar_reset():
             password = entry_pass.get().encode('utf-8')
 
-            # Verificar hash de contraseña
             try:
                 if not bcrypt.checkpw(password, PASSWORD_HASH.encode('utf-8')):
                     messagebox.showerror("Acceso denegado", "Contraseña incorrecta")
@@ -473,7 +584,6 @@ class InventarioWindow:
                 ventana_pass.destroy()
                 return
 
-            # Confirmación adicional
             confirmacion = messagebox.askyesno(
                 "Confirmar reseteo",
                 "⚠️ ¿Está seguro de resetear TODO el stock a 0?\n\n"
@@ -485,32 +595,13 @@ class InventarioWindow:
                 ventana_pass.destroy()
                 return
 
-            # ✅ REGISTRO DE AUDITORÍA
-            from datetime import datetime
-            logging.warning(
-                f"AUDITORÍA - Reseteo de stock iniciado - "
-                f"Usuario: Principal - "
-                f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-
-            # Ejecutar reseteo (incluye backup automático en database.py)
             if DatabaseManager.resetear_stock():
                 self._cargar_productos()
-
-                # ✅ REGISTRO DE AUDITORÍA EXITOSA
-                logging.warning(
-                    f"AUDITORÍA - Reseteo de stock COMPLETADO - "
-                    f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-
                 messagebox.showinfo(
                     "Éxito",
-                    "Todo el stock ha sido reseteado a 0 correctamente.\n\n"
-                    "✅ Se creó un backup automático antes de la operación.\n"
-                    "✅ La operación fue registrada en el log de auditoría."
+                    "Todo el stock ha sido reseteado a 0 correctamente."
                 )
             else:
-                logging.error("AUDITORÍA - Reseteo de stock FALLÓ")
                 messagebox.showerror("Error", "No se pudo resetear el stock")
 
             ventana_pass.destroy()
@@ -524,12 +615,10 @@ class InventarioWindow:
             command=confirmar_reset
         ).pack(pady=10)
 
-        # Permitir confirmar con Enter
         entry_pass.bind("<Return>", lambda e: confirmar_reset())
 
     def _mostrar_menu_contextual(self, event):
         """Muestra menú contextual en clic derecho"""
-        # Seleccionar item bajo el cursor
         item_id = self.tree.identify_row(event.y)
         if item_id:
             self.tree.selection_set(item_id)
@@ -541,13 +630,31 @@ class InventarioWindow:
             self.menu_contextual.grab_release()
 
     def _exportar_a_excel(self):
-        """
-        Exporta inventario completo a Excel
-        ✅ MEJORADO: Validación de datos antes de exportar
-        """
+        """Exporta inventario completo a Excel"""
         try:
-            # ✅ VALIDACIÓN: Verificar que hay productos
-            productos = DatabaseManager.obtener_todos_productos()
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # ✅ SELECT en orden correcto
+                cursor.execute("""
+                    SELECT 
+                        id_producto,
+                        codigo_barras,
+                        descripcion,
+                        cantidad,
+                        proveedor,
+                        precio_compra,
+                        precio_venta,
+                        unidad,
+                        impuesto,
+                        bonificacion,
+                        grupo,
+                        subgrupo,
+                        fecha_vencimiento
+                    FROM productos
+                """)
+
+                productos = cursor.fetchall()
 
             if not productos:
                 messagebox.showwarning(
@@ -565,13 +672,24 @@ class InventarioWindow:
             if not ruta:
                 return
 
-            # Obtener datos
-            columnas = list(COLUMN_WIDTHS.keys())
+            # ✅ Crear DataFrame con nombres de columnas correctos
+            columnas = [
+                "ID",
+                "Código de Barras",
+                "Descripción",
+                "Cantidad",
+                "Proveedor",
+                "Precio Compra",
+                "Precio Venta",
+                "Unidad",
+                "Impuesto",
+                "Bonificación",
+                "Grupo",
+                "Subgrupo",
+                "Fecha Vencimiento"
+            ]
 
-            # Crear DataFrame
             df = pd.DataFrame(productos, columns=columnas)
-
-            # Exportar
             df.to_excel(ruta, index=False, sheet_name="Inventario")
 
             messagebox.showinfo(
@@ -586,10 +704,7 @@ class InventarioWindow:
             messagebox.showerror("Error", f"No se pudo exportar:\n{e}")
 
     def _actualizar_desde_excel(self):
-        """
-        Actualiza precios desde archivo Excel
-        ✅ MEJORADO: Ventana de progreso real
-        """
+        """Actualiza precios desde archivo Excel"""
         archivo = filedialog.askopenfilename(
             title="Seleccionar archivo Excel con precios",
             filetypes=[("Archivos Excel", "*.xlsx *.xls")]
@@ -598,7 +713,7 @@ class InventarioWindow:
         if not archivo:
             return
 
-        # ✅ VENTANA DE PROGRESO REAL
+        # Ventana de progreso
         ventana_progreso = Toplevel(self.window)
         ventana_progreso.title("Procesando...")
         ventana_progreso.geometry("400x100")
@@ -611,7 +726,6 @@ class InventarioWindow:
             font=FONT_STYLE
         ).pack(pady=20)
 
-        # Barra de progreso indeterminada
         from tkinter import ttk
         progress = ttk.Progressbar(
             ventana_progreso,
@@ -621,35 +735,17 @@ class InventarioWindow:
         progress.pack(pady=10)
         progress.start(10)
 
-        # Forzar actualización de la ventana
         ventana_progreso.update()
 
-        # Actualizar en segundo plano
         def actualizar():
-            actualizados, insertados = InventarioController.actualizar_producto_desde_excel(archivo)
+            actualizados, insertados, errores = InventarioController.actualizar_producto_desde_excel(archivo)
 
-            # Cerrar ventana de progreso
             progress.stop()
             ventana_progreso.destroy()
 
             if actualizados or insertados:
                 self._cargar_productos()
-                messagebox.showinfo(
-                    "✅ Actualización Completada",
-                    f"Productos actualizados: {actualizados}\n"
-                    f"Productos insertados: {insertados}\n\n"
-                    f"Total procesados: {actualizados + insertados}"
-                )
-            else:
-                messagebox.showwarning(
-                    "Sin Cambios",
-                    "No se realizaron actualizaciones.\n\n"
-                    "Verifica que el archivo contenga las columnas:\n"
-                    "- EAN o Código de Barras\n"
-                    "- Venta Real o Precio Compra"
-                )
 
-        # Ejecutar actualización después de un pequeño delay
         self.window.after(100, actualizar)
 
     def _buscar_y_reemplazar(self):
@@ -726,7 +822,6 @@ class InventarioWindow:
             command=ejecutar
         ).pack(pady=15)
 
-        # Permitir ejecutar con Enter
         entry_busqueda.bind("<Return>", lambda e: entry_compra.focus())
         entry_compra.bind("<Return>", lambda e: entry_venta.focus())
         entry_venta.bind("<Return>", lambda e: ejecutar())
