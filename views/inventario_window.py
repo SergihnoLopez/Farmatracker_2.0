@@ -630,12 +630,25 @@ class InventarioWindow:
             self.menu_contextual.grab_release()
 
     def _exportar_a_excel(self):
-        """Exporta inventario completo a Excel"""
+        """
+        Exporta inventario completo a Excel conservando estructura del modelo
+
+        Estructura: 19 columnas en el orden del archivo modelo
+        - Centro, Proveedor, Material, Denominación, Lote, UND, Cantidad,
+          Venta Real, Venta Cte, Impuesto, $Marcado, % Boni, Fecha Creación,
+          Catalogo, Grupo, SubGrupo, Plazo 2, Plazo 3, EAN
+        """
         try:
+            import pandas as pd
+            from datetime import datetime
+            from tkinter import filedialog, messagebox
+            from models.database import get_db_connection
+            import logging
+
+            # Obtener productos de la base de datos
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # ✅ SELECT en orden correcto
                 cursor.execute("""
                     SELECT 
                         id_producto,
@@ -652,6 +665,7 @@ class InventarioWindow:
                         subgrupo,
                         fecha_vencimiento
                     FROM productos
+                    ORDER BY id_producto
                 """)
 
                 productos = cursor.fetchall()
@@ -663,48 +677,118 @@ class InventarioWindow:
                 )
                 return
 
+            # Solicitar ubicación de guardado
             ruta = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
                 filetypes=[("Archivos Excel", "*.xlsx")],
-                initialfile="inventario.xlsx"
+                initialfile="inventario_exportado.xlsx"
             )
 
             if not ruta:
                 return
 
-            # ✅ Crear DataFrame con nombres de columnas correctos
-            columnas = [
-                "ID",
-                "Código de Barras",
-                "Descripción",
-                "Cantidad",
-                "Proveedor",
-                "Precio Compra",
-                "Precio Venta",
-                "Unidad",
-                "Impuesto",
-                "Bonificación",
-                "Grupo",
-                "Subgrupo",
-                "Fecha Vencimiento"
+            # Preparar datos con la estructura del modelo
+            datos_exportar = []
+            fecha_actual = datetime.now().strftime("%Y%m%d")  # Formato YYYYMMDD
+
+            for producto in productos:
+                # Extraer valores del producto
+                id_prod = producto[0]
+                codigo_barras = producto[1] or ""
+                descripcion = producto[2] or ""
+                cantidad = producto[3] or 0
+                proveedor = producto[4] or ""
+                precio_compra = producto[5] or 0
+                precio_venta = producto[6] or 0
+                unidad = producto[7] or "UN"
+                impuesto = producto[8] or "0%  Exento"
+                bonificacion = producto[9] or 0.0
+                grupo = producto[10] or ""
+                subgrupo = producto[11] or ""
+                # fecha_vencimiento = producto[12]  # No se usa en el Excel modelo
+
+                # Construir fila con EXACTAMENTE el orden del modelo
+                fila = {
+                    'Centro': 8100.0,  # Valor fijo del modelo
+                    'Proveedor': proveedor,
+                    'Material': float(id_prod) if id_prod else 0.0,
+                    'Denominación': descripcion,
+                    'Lote': 'NORMAL_0',  # Valor por defecto del modelo
+                    'UND': unidad,
+                    'Cantidad': int(cantidad),
+                    'Venta Real': int(precio_compra),  # El modelo usa enteros
+                    'Venta Cte': int(precio_venta),  # El modelo usa enteros
+                    'Impuesto': impuesto,
+                    '$Marcado': 0.0,  # Valor por defecto
+                    '% Boni': float(bonificacion),
+                    'Fecha Creación': float(fecha_actual),  # Como número YYYYMMDD
+                    'Catalogo': 'ETICOS',  # Valor por defecto del modelo
+                    'Grupo': grupo,
+                    'SubGrupo': subgrupo,
+                    'Plazo 2': '',  # Vacío por defecto
+                    'Plazo 3': '',  # Vacío por defecto
+                    'EAN': codigo_barras
+                }
+
+                datos_exportar.append(fila)
+
+            # Crear DataFrame con el orden exacto de columnas del modelo
+            columnas_orden = [
+                'Centro',
+                'Proveedor',
+                'Material',
+                'Denominación',
+                'Lote',
+                'UND',
+                'Cantidad',
+                'Venta Real',
+                'Venta Cte',
+                'Impuesto',
+                '$Marcado',
+                '% Boni',
+                'Fecha Creación',
+                'Catalogo',
+                'Grupo',
+                'SubGrupo',
+                'Plazo 2',
+                'Plazo 3',
+                'EAN'
             ]
 
-            df = pd.DataFrame(productos, columns=columnas)
-            df.to_excel(ruta, index=False, sheet_name="Inventario")
+            df = pd.DataFrame(datos_exportar, columns=columnas_orden)
+
+            # Exportar a Excel
+            df.to_excel(ruta, index=False, sheet_name="Sheet1", engine='openpyxl')
 
             messagebox.showinfo(
                 "✅ Exportación Exitosa",
-                f"Inventario exportado correctamente:\n\n"
+                f"Inventario exportado correctamente con formato modelo:\n\n"
                 f"{ruta}\n\n"
-                f"Total productos exportados: {len(productos)}"
+                f"Total productos exportados: {len(productos)}\n"
+                f"Columnas: {len(columnas_orden)}"
             )
+
+            logging.info(f"Inventario exportado: {len(productos)} productos a {ruta}")
 
         except Exception as e:
             logging.error(f"Error al exportar a Excel: {e}", exc_info=True)
             messagebox.showerror("Error", f"No se pudo exportar:\n{e}")
 
     def _actualizar_desde_excel(self):
-        """Actualiza precios desde archivo Excel"""
+        """
+        Actualiza inventario desde archivo Excel
+
+        Compatible con:
+        - Archivo modelo (19 columnas con EAN, Denominación, Venta Real, etc.)
+        - Archivos .xls (antiguos) y .xlsx (modernos)
+
+        El método delega el trabajo pesado al InventarioController
+        """
+        from tkinter import filedialog, messagebox, Toplevel, Label
+        from tkinter import ttk
+        from controllers.inventario import InventarioController
+
+        # Seleccionar archivo
         archivo = filedialog.askopenfilename(
             title="Seleccionar archivo Excel con precios",
             filetypes=[("Archivos Excel", "*.xlsx *.xls")]
@@ -716,17 +800,18 @@ class InventarioWindow:
         # Ventana de progreso
         ventana_progreso = Toplevel(self.window)
         ventana_progreso.title("Procesando...")
-        ventana_progreso.geometry("400x100")
+        ventana_progreso.geometry("400x150")
         ventana_progreso.transient(self.window)
         ventana_progreso.grab_set()
 
         Label(
             ventana_progreso,
-            text="Procesando archivo Excel...\nPor favor espere.",
-            font=FONT_STYLE
+            text="Procesando archivo Excel...\n\nPor favor espere, esto puede tomar unos momentos.",
+            font=FONT_STYLE,
+            justify="center"
         ).pack(pady=20)
 
-        from tkinter import ttk
+        # Barra de progreso
         progress = ttk.Progressbar(
             ventana_progreso,
             mode='indeterminate',
@@ -735,18 +820,32 @@ class InventarioWindow:
         progress.pack(pady=10)
         progress.start(10)
 
+        # Forzar actualización de la ventana
         ventana_progreso.update()
 
-        def actualizar():
-            actualizados, insertados, errores = InventarioController.actualizar_producto_desde_excel(archivo)
+        # Procesar archivo en segundo plano
+        def procesar():
+            try:
+                # Llamar al controlador para procesar el archivo
+                actualizados, insertados, errores = InventarioController.actualizar_producto_desde_excel(archivo)
 
-            progress.stop()
-            ventana_progreso.destroy()
+                # Cerrar ventana de progreso
+                progress.stop()
+                ventana_progreso.destroy()
 
-            if actualizados or insertados:
-                self._cargar_productos()
+                # Recargar productos en la tabla
+                if actualizados > 0 or insertados > 0:
+                    self._cargar_productos()
 
-        self.window.after(100, actualizar)
+            except Exception as e:
+                progress.stop()
+                ventana_progreso.destroy()
+                messagebox.showerror("Error", f"Error al procesar archivo:\n{e}")
+                import logging
+                logging.error(f"Error en _actualizar_desde_excel: {e}", exc_info=True)
+
+        # Ejecutar después de un pequeño delay para que la ventana se muestre
+        self.window.after(100, procesar)
 
     def _buscar_y_reemplazar(self):
         """Abre diálogo de búsqueda y reemplazo de precios"""

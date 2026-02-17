@@ -1,6 +1,8 @@
 """
 FarmaTrack - Sistema de gestión para Droguería Irlandesa
-Punto de entrada de la aplicación
+✅ MIGRADO A CUSTOMTKINTER
+
+Punto de entrada de la aplicación.
 """
 import sys
 import logging
@@ -9,6 +11,21 @@ from pathlib import Path
 # Agregar directorio raíz al path
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
+
+# ==============================================================================
+# ⚠️ IMPORTANTE: INICIALIZAR CUSTOMTKINTER ANTES DE IMPORTAR VENTANAS
+# ==============================================================================
+
+import customtkinter as ctk
+from ctk_design_system import initialize_customtkinter
+
+# Inicializar CustomTkinter ANTES de crear cualquier ventana
+ctk.set_appearance_mode("light")  # Light mode únicamente
+ctk.set_default_color_theme("blue")  # Tema azul
+
+# ==============================================================================
+# CONFIGURACIÓN DE LOGS
+# ==============================================================================
 
 # Crear carpeta de logs si no existe
 LOGS_DIR = BASE_DIR / "logs"
@@ -22,13 +39,17 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
-# Agregar también logging a consola para desarrollo
+# Logging a consola
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.WARNING)
 console_formatter = logging.Formatter('%(levelname)s - %(message)s')
 console_handler.setFormatter(console_formatter)
 logging.getLogger().addHandler(console_handler)
 
+
+# ==============================================================================
+# VERIFICACIONES
+# ==============================================================================
 
 def verificar_dependencias():
     """Verifica que todas las dependencias estén instaladas"""
@@ -37,7 +58,8 @@ def verificar_dependencias():
         ('fpdf', 'fpdf2'),
         ('pandas', 'pandas'),
         ('openpyxl', 'openpyxl'),
-        ('bcrypt', 'bcrypt')
+        ('bcrypt', 'bcrypt'),
+        ('customtkinter', 'customtkinter'),  # ✅ NUEVA DEPENDENCIA
     ]
 
     faltantes = []
@@ -69,10 +91,9 @@ def verificar_estructura():
         'logs'
     ]
 
-    faltantes = []
-
     for carpeta in carpetas_requeridas:
         carpeta_path = BASE_DIR / carpeta
+
         if not carpeta_path.exists():
             carpeta_path.mkdir(exist_ok=True)
             logging.info(f"Carpeta '{carpeta}' creada automáticamente")
@@ -92,11 +113,10 @@ def verificar_base_datos():
     from config.settings import DB_PATH
 
     try:
-        # Conectar o crear base de datos
         conn = sqlite3.connect(str(DB_PATH))
         cursor = conn.cursor()
 
-        # Verificar si existe la tabla productos
+        # Verificar tabla productos
         cursor.execute("""
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name='productos'
@@ -125,7 +145,7 @@ def verificar_base_datos():
 
             logging.info("Tabla 'productos' creada exitosamente")
 
-        # Verificar si existe la tabla ventas
+        # Verificar tabla ventas
         cursor.execute("""
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name='ventas'
@@ -161,59 +181,19 @@ def inicializar_configuracion():
     """Inicializa archivos de configuración si no existen"""
     from config.settings import RESOURCES_DIR
 
-    # Verificar que exista el directorio de recursos
     RESOURCES_DIR.mkdir(exist_ok=True)
 
-    # Crear archivo .gitignore si no existe
-    gitignore_path = BASE_DIR / '.gitignore'
-    if not gitignore_path.exists():
-        gitignore_content = """# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
 
-# Virtual environments
-venv/
-.venv/
-env/
-ENV/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-logs/*.log
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# PDFs generados
-factura_*.pdf
-pedido_*.pdf
-
-# Archivos temporales
-*.tmp
-~$*
-"""
-        gitignore_path.write_text(gitignore_content, encoding='utf-8')
-        logging.info("Archivo .gitignore creado")
-
+# ==============================================================================
+# MAIN
+# ==============================================================================
 
 def main():
     """Función principal"""
     print("=" * 60)
     print(" FarmaTrack - Droguería Irlandesa")
     print(" Sistema de Gestión de Inventario y Ventas")
+    print(" ✅ MIGRADO A CUSTOMTKINTER")
     print("=" * 60)
     print()
 
@@ -235,12 +215,17 @@ def main():
         inicializar_configuracion()
         print("✅ Configuración OK")
 
+        # ✅ Inicializar sistema de diseño CustomTkinter
+        print("🎨 Inicializando sistema de diseño...")
+        initialize_customtkinter()
+        print("✅ Sistema de diseño OK")
+
         print()
         print("🚀 Iniciando aplicación...")
         print()
 
         logging.info("=" * 50)
-        logging.info("Iniciando FarmaTrack")
+        logging.info("Iniciando FarmaTrack (CustomTkinter)")
         logging.info("=" * 50)
 
         # Importar y ejecutar aplicación
@@ -255,13 +240,7 @@ def main():
         error_msg = f"Error al importar módulos: {e}"
         logging.critical(error_msg, exc_info=True)
         print(f"\n❌ {error_msg}")
-        print("\nAsegúrate de que todos los archivos estén en sus carpetas correctas:")
-        print("  - config/settings.py")
-        print("  - models/database.py")
-        print("  - views/main_window.py")
-        print("  - controllers/ventas.py")
-        print("  - utils/validators.py")
-        print("  - utils/formatters.py")
+        print("\nAsegúrate de que todos los archivos estén en sus carpetas correctas")
         sys.exit(1)
 
     except KeyboardInterrupt:
@@ -276,7 +255,6 @@ def main():
         print("\nRevisa el archivo de log para más detalles:")
         print(f"  {LOGS_DIR / 'farmatrack.log'}")
 
-        # Mostrar traceback en modo desarrollo
         import traceback
         print("\n" + "=" * 60)
         print("TRACEBACK COMPLETO:")
