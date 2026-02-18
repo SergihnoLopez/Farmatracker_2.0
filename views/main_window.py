@@ -1,7 +1,7 @@
 """
 Ventana principal de la aplicación
 ✅ MIGRADO A CUSTOMTKINTER
-✅ CORREGIDO: Usa CTkImage para imágenes (sin warnings)
+✅ CORREGIDO: Usa video MP4 con OpenCV (cv2)
 ✅ CORREGIDO: Maximiza ventana DESPUÉS de configurar UI
 
 Elimina TOTALMENTE:
@@ -9,7 +9,7 @@ Elimina TOTALMENTE:
 - tk.Frame → ctk.CTkFrame
 - tk.Label → ctk.CTkLabel
 - tk.Button → ctk.CTkButton
-- PIL.ImageTk.PhotoImage → customtkinter.CTkImage (sin warnings)
+- GIF animado → Video MP4 con OpenCV
 """
 
 import customtkinter as ctk
@@ -19,9 +19,18 @@ from ctk_design_system import (
     Fonts,
     Dimensions,
 )
-from PIL import Image
 from config.settings import RESOURCES_DIR
 import logging
+from PIL import Image, ImageTk
+import tkinter as tk
+
+# Importar OpenCV para reproducir video
+try:
+    import cv2
+    VIDEO_DISPONIBLE = True
+except ImportError:
+    VIDEO_DISPONIBLE = False
+    logging.warning("OpenCV no está instalado. Instala con: pip install opencv-python")
 
 
 class MainWindow:
@@ -35,13 +44,14 @@ class MainWindow:
         # ✅ fg_color en lugar de configure(bg=)
         self.root.configure(fg_color=Colors.BACKGROUND)
 
-        self.after_id = None
-        self.gif_frames = []  # Lista de CTkImage
-        self.frame_delays = []
-        self.current_frame = 0
+        # Variables para el video
+        self.video_capture = None
+        self.video_label = None
+        self.video_after_id = None
+        self.video_fps = 30  # FPS por defecto
 
         self._setup_ui()
-        self._load_animation()
+        self._load_video()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -86,13 +96,12 @@ class MainWindow:
         )
         self.main_frame.pack(expand=True, fill="both", padx=20, pady=20)
 
-        # ✅ CTkLabel para GIF (se llenará con CTkImage)
-        self.gif_label = ctk.CTkLabel(
+        # ✅ Label de tkinter para mostrar frames del video
+        self.video_label = tk.Label(
             self.main_frame,
-            text="",
-            fg_color="transparent"
+            bg=Colors.SURFACE
         )
-        self.gif_label.pack(pady=10)
+        self.video_label.pack(pady=10)
 
         # ✅ CTkLabel para títulos
         title = ctk.CTkLabel(
@@ -196,74 +205,92 @@ class MainWindow:
             )
             btn_backup.pack(side="left", padx=10)
 
-    def _load_animation(self):
+    def _load_video(self):
         """
-        Carga el GIF animado usando CTkImage
-        ✅ CORREGIDO: Usa CTkImage en lugar de ImageTk.PhotoImage
+        Carga y reproduce el video MP4 usando OpenCV
+        ✅ Usa cv2.VideoCapture para leer frames
+        ✅ Mantiene dimensiones originales del video
+        ✅ Reproduce en loop infinito
         """
-        gif_path = RESOURCES_DIR / "animacion.gif"
+        if not VIDEO_DISPONIBLE:
+            logging.warning("OpenCV no disponible, video no se mostrará")
+            return
 
-        if not gif_path.exists():
-            logging.warning(f"GIF no encontrado: {gif_path}")
+        video_path = RESOURCES_DIR / "escudo_vector_farmacia_tecnologia.mp4"
+
+        if not video_path.exists():
+            logging.warning(f"Video no encontrado: {video_path}")
             return
 
         try:
-            gif = Image.open(gif_path)
+            # Abrir el video con OpenCV
+            self.video_capture = cv2.VideoCapture(str(video_path))
 
-            # Extraer frames del GIF
-            frame_index = 0
-            while True:
-                try:
-                    gif.seek(frame_index)
+            if not self.video_capture.isOpened():
+                logging.error(f"No se pudo abrir el video: {video_path}")
+                return
 
-                    # Copiar frame actual
-                    frame = gif.copy()
-                    frame = frame.resize((400, 400), Image.Resampling.LANCZOS)
+            # Obtener FPS del video
+            fps = self.video_capture.get(cv2.CAP_PROP_FPS)
+            self.video_fps = int(fps) if fps > 0 else 30
 
-                    # ✅ IMPORTANTE: Usar CTkImage en lugar de ImageTk.PhotoImage
-                    ctk_image = ctk.CTkImage(
-                        light_image=frame,
-                        dark_image=frame,  # Mismo para light/dark (solo usamos light)
-                        size=(400, 400)
-                    )
+            # Calcular delay entre frames (en milisegundos)
+            self.video_delay = int(1000 / self.video_fps)
 
-                    self.gif_frames.append(ctk_image)
+            # Obtener dimensiones del video
+            width = int(self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-                    # Guardar delay del frame
-                    delay = gif.info.get('duration', 50)
-                    self.frame_delays.append(delay)
+            logging.info(f"Video cargado: {video_path.name} ({width}x{height}px @ {self.video_fps}fps)")
 
-                    frame_index += 1
-                except EOFError:
-                    break
-
-            if self.gif_frames:
-                self._animate_gif()
-                logging.info(f"GIF cargado: {len(self.gif_frames)} frames")
+            # Iniciar reproducción
+            self._update_video_frame()
 
         except Exception as e:
-            logging.error(f"Error al cargar GIF: {e}")
+            logging.error(f"Error al cargar video: {e}")
 
-    def _animate_gif(self):
-        """Anima el GIF frame por frame"""
-        if not self.gif_frames:
+    def _update_video_frame(self):
+        """
+        Actualiza el frame actual del video
+        Se llama recursivamente para crear el efecto de video
+        """
+        if not self.video_capture or not self.video_capture.isOpened():
             return
 
-        # ✅ Configurar imagen usando CTkImage (no hay warning)
-        self.gif_label.configure(image=self.gif_frames[self.current_frame])
+        # Leer siguiente frame
+        ret, frame = self.video_capture.read()
 
-        # Siguiente frame
-        self.current_frame = (self.current_frame + 1) % len(self.gif_frames)
+        if not ret:
+            # Si llegamos al final del video, reiniciar desde el principio
+            self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = self.video_capture.read()
 
-        # Programar siguiente actualización con delay específico del frame
-        delay = self.frame_delays[self.current_frame] if self.frame_delays else 50
-        self.after_id = self.root.after(delay, self._animate_gif)
+        if ret:
+            # Convertir de BGR (OpenCV) a RGB (PIL/Tkinter)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Convertir a PIL Image
+            img = Image.fromarray(frame_rgb)
+
+            # Convertir a PhotoImage para tkinter
+            photo = ImageTk.PhotoImage(image=img)
+
+            # Actualizar el label con el nuevo frame
+            self.video_label.configure(image=photo)
+            self.video_label.image = photo  # Mantener referencia
+
+        # Programar siguiente actualización
+        self.video_after_id = self.root.after(self.video_delay, self._update_video_frame)
 
     def _on_close(self):
         """Maneja el cierre de la ventana"""
-        # Detener animación
-        if self.after_id:
-            self.root.after_cancel(self.after_id)
+        # Detener actualización de frames
+        if self.video_after_id:
+            self.root.after_cancel(self.video_after_id)
+
+        # Liberar recursos de OpenCV
+        if self.video_capture:
+            self.video_capture.release()
 
         # Cerrar aplicación
         self.root.quit()
