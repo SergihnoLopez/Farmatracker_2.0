@@ -2,6 +2,7 @@
 Ventana principal de la aplicación
 ✅ MIGRADO A CUSTOMTKINTER
 ✅ CORREGIDO: Usa CTkImage para imágenes (sin warnings)
+✅ CORREGIDO: Maximiza ventana DESPUÉS de configurar UI
 
 Elimina TOTALMENTE:
 - tk.Tk → ctk.CTk
@@ -34,20 +35,6 @@ class MainWindow:
         # ✅ fg_color en lugar de configure(bg=)
         self.root.configure(fg_color=Colors.BACKGROUND)
 
-        # ✅ MAXIMIZAR VENTANA AL INICIAR
-        self.root.state("zoomed")
-
-        # Intentar maximizar también con geometry para compatibilidad
-        try:
-            self.root.attributes('-zoomed', True)  # Linux/Mac
-        except:
-            pass
-
-        try:
-            self.root.wm_state('zoomed')  # Windows alternativo
-        except:
-            pass
-
         self.after_id = None
         self.gif_frames = []  # Lista de CTkImage
         self.frame_delays = []
@@ -57,6 +44,37 @@ class MainWindow:
         self._load_animation()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # ✅ MAXIMIZAR AL FINAL - Después de configurar toda la UI
+        # Usar after() asegura que se ejecute después del renderizado inicial
+        self.root.after(10, self._maximizar_ventana)
+
+    def _maximizar_ventana(self):
+        """
+        Maximiza la ventana después de que se haya renderizado completamente.
+        Se ejecuta 10ms después de la inicialización para evitar conflictos con CustomTkinter.
+        """
+        try:
+            # Método principal para Windows
+            self.root.state("zoomed")
+            logging.info("Ventana maximizada con state('zoomed')")
+        except Exception as e:
+            logging.warning(f"state('zoomed') falló: {e}")
+            # Fallback para diferentes plataformas
+            try:
+                # Linux/Mac
+                self.root.attributes('-zoomed', True)
+                logging.info("Ventana maximizada con attributes('-zoomed')")
+            except Exception as e2:
+                logging.warning(f"attributes('-zoomed') falló: {e2}")
+                # Último recurso: geometry manual
+                try:
+                    screen_width = self.root.winfo_screenwidth()
+                    screen_height = self.root.winfo_screenheight()
+                    self.root.geometry(f"{screen_width}x{screen_height}+0+0")
+                    logging.info(f"Ventana maximizada con geometry manual: {screen_width}x{screen_height}")
+                except Exception as e3:
+                    logging.error(f"No se pudo maximizar la ventana: {e3}")
 
     def _setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -72,7 +90,7 @@ class MainWindow:
         self.gif_label = ctk.CTkLabel(
             self.main_frame,
             text="",
-            fg_color=Colors.SURFACE
+            fg_color="transparent"
         )
         self.gif_label.pack(pady=10)
 
@@ -93,7 +111,7 @@ class MainWindow:
         )
         subtitle.pack(pady=(0, 50))
 
-        # Botones principales
+        # Crear botones del menú principal
         self._create_buttons()
 
     def _create_buttons(self):
@@ -106,7 +124,7 @@ class MainWindow:
             BACKUP_DISPONIBLE = False
             logging.warning("Módulo de backups no disponible")
 
-        # ✅ Importar ventanas migradas
+        # ✅ Importar ventanas necesarias
         from views.venta_window import VentaWindow
         from views.inventario_window import InventarioWindow
         from views.pedidos_window import PedidosWindow
@@ -115,7 +133,7 @@ class MainWindow:
         from views.actualizador_window import ActualizadorWindow
         from views.verificacion_window import VerificacionWindow
 
-        # ✅ CTkFrame para contener botones
+        # ✅ Frame para primera fila de botones
         frame_botones1 = ctk.CTkFrame(
             self.main_frame,
             fg_color=Colors.SURFACE,
@@ -123,7 +141,7 @@ class MainWindow:
         )
         frame_botones1.pack()
 
-        # Definición de botones
+        # Primera fila de botones
         botones1 = [
             ("💰 Registrar Venta", lambda: VentaWindow(self.root)),
             ("📦 Ver Inventario", lambda: InventarioWindow(self.root)),
@@ -131,7 +149,6 @@ class MainWindow:
             ("📋 Módulo de Pedidos", lambda: PedidosWindow(self.root))
         ]
 
-        # ✅ Crear botones con CTkPrimaryButton
         for texto, comando in botones1:
             btn = CTkPrimaryButton(
                 frame_botones1,
@@ -142,7 +159,7 @@ class MainWindow:
             )
             btn.pack(side="left", padx=10)
 
-        # Frame botones fila 2
+        # ✅ Frame para segunda fila de botones
         frame_botones2 = ctk.CTkFrame(
             self.main_frame,
             fg_color=Colors.SURFACE,
@@ -150,6 +167,7 @@ class MainWindow:
         )
         frame_botones2.pack(pady=10)
 
+        # Segunda fila de botones
         botones2 = [
             ("💵 Liquidador", lambda: LiquidadorWindow(self.root)),
             ("🔄 Actualizar Inventario", lambda: ActualizadorWindow(self.root)),
@@ -166,7 +184,7 @@ class MainWindow:
             )
             btn.pack(side="left", padx=10)
 
-        # Botón de backups si está disponible
+        # ✅ Botón de backups (solo si está disponible)
         if BACKUP_DISPONIBLE:
             btn_backup = CTkPrimaryButton(
                 frame_botones2,
@@ -174,13 +192,13 @@ class MainWindow:
                 command=lambda: BackupWindow(self.root),
                 width=220,
                 height=Dimensions.BUTTON_HEIGHT,
-                fg_color=Colors.SUCCESS
+                fg_color=Colors.SUCCESS  # Verde para destacarlo
             )
             btn_backup.pack(side="left", padx=10)
 
     def _load_animation(self):
         """
-        Carga la animación GIF usando CTkImage.
+        Carga el GIF animado usando CTkImage
         ✅ CORREGIDO: Usa CTkImage en lugar de ImageTk.PhotoImage
         """
         gif_path = RESOURCES_DIR / "animacion.gif"
