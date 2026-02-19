@@ -17,7 +17,7 @@ class BackupWindow:
         self.window = Toplevel(parent)
         self.window.title("Gestión de Respaldos")
         self.window.geometry("900x600")
-
+        self.window.grab_set()
         self.backup_manager = BackupManager()
 
         self._setup_ui()

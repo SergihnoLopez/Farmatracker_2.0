@@ -24,7 +24,7 @@ class InventarioWindow:
         self.window = Toplevel(parent)
         self.window.title("Inventario de Productos")
         self.window.state("zoomed")
-
+        self.window.grab_set()
         self.conn = None
         self._setup_ui()
         self._cargar_productos()

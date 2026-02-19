@@ -14,6 +14,7 @@ class AgregarProductoWindow:
         self.window = Toplevel(parent)
         self.window.title("Agregar Producto")
         self.window.state("zoomed")
+        self.window.grab_set()
 
         self.campos = [
             ("codigo_barras", "Código de Barras"),

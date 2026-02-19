@@ -47,9 +47,11 @@ class VentaWindow:
         self.window.grab_set()
         self.window.title("Registrar Venta")
         self.window.state("zoomed")
+        self.window.grab_set()
         self._setup_ui()
 
-    # ──────────────────────────────────────────────────────────────────────────
+
+        # ──────────────────────────────────────────────────────────────────────────
     def _setup_ui(self):
         frame_entrada = Frame(self.window)
         frame_entrada.pack(pady=10)

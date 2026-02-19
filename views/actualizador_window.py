@@ -17,7 +17,7 @@ class ActualizadorWindow:
         self.window = Toplevel(parent)
         self.window.title("Actualizar Inventario")
         self.window.state("zoomed")
-
+        self.window.grab_set()
         self._setup_ui()
 
         # Cerrar ventana correctamente

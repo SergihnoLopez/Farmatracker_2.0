@@ -18,7 +18,7 @@ class PedidosWindow:
         self.window = Toplevel(parent)
         self.window.title("Módulo de Pedidos")
         self.window.state("zoomed")
-
+        self.window.grab_set()
         self._setup_ui()
 
     def _setup_ui(self):

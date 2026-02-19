@@ -87,6 +87,7 @@ class ReporteVentasWindow:
         self.window.grab_set()
         self.window.title("📊 Reporte de Ventas – Droguería Irlandesa")
         self.window.state("zoomed")
+        self.window.grab_set()
         self.window.configure(bg=Colors.BACKGROUND)
 
         # Estado
