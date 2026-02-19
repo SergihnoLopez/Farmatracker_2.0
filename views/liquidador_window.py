@@ -37,13 +37,12 @@ class LiquidadorWindow:
         self.entry_busqueda.grid(row=1, column=0, sticky="ew", padx=50, pady=(0, 10))
         self.entry_busqueda.focus()
 
-        # ── Listbox de sugerencias (flotante) ─────────────────────────────────
-        self.lista_sugerencias = Listbox(self.window, height=6, font=("Arial", 12))
-        self.lista_sugerencias.place_forget()
+        # ── Listbox de sugerencias (ventana flotante independiente) ───────────
+        self._popup = None  # ventana flotante para sugerencias
+        self.lista_sugerencias = None
 
         self.entry_busqueda.bind("<KeyRelease>", self._buscar_sugerencias)
-        self.lista_sugerencias.bind("<Double-1>", self._seleccionar_sugerencia)
-        self.lista_sugerencias.bind("<Return>",   self._seleccionar_sugerencia)
+        self.entry_busqueda.bind("<FocusOut>", lambda e: self.window.after(150, self._cerrar_popup))
 
         # ── Label nombre del producto seleccionado ────────────────────────────
         #    Aparece entre el buscador y la tabla de precios
@@ -108,18 +107,62 @@ class LiquidadorWindow:
         self.tree.pack(expand=True)
 
     # ──────────────────────────────────────────────────────────────────────────
+    def _cerrar_popup(self):
+        """Cierra la ventana flotante de sugerencias"""
+        if self._popup:
+            try:
+                self._popup.destroy()
+            except Exception:
+                pass
+            self._popup = None
+            self.lista_sugerencias = None
+
     def _buscar_sugerencias(self, event):
         texto = self.entry_busqueda.get().strip()
 
         if not texto:
-            self.lista_sugerencias.place_forget()
+            self._cerrar_popup()
             return
 
         resultados = DatabaseManager.buscar_productos_like(texto, limit=30)
 
         if resultados:
-            self.lista_sugerencias.delete(0, END)
+            # Calcular posición absoluta del entry en la pantalla
+            self.entry_busqueda.update_idletasks()
+            ex = self.entry_busqueda.winfo_rootx()
+            ey = self.entry_busqueda.winfo_rooty() + self.entry_busqueda.winfo_height()
+            ew = self.entry_busqueda.winfo_width()
 
+            # Crear o reutilizar ventana flotante
+            if self._popup is None:
+                from tkinter import Toplevel, Listbox, Scrollbar, BOTH, RIGHT, Y
+                self._popup = Toplevel(self.window)
+                self._popup.wm_overrideredirect(True)  # sin bordes
+                self._popup.attributes("-topmost", True)
+
+                frame = __import__('tkinter').Frame(self._popup, bd=1, relief="solid")
+                frame.pack(fill=BOTH, expand=True)
+
+                sb = Scrollbar(frame, orient="vertical")
+                self.lista_sugerencias = Listbox(
+                    frame,
+                    height=8,
+                    font=("Arial", 13),
+                    yscrollcommand=sb.set,
+                    activestyle="dotbox",
+                    selectbackground="#0f6cbd",
+                    selectforeground="white"
+                )
+                sb.config(command=self.lista_sugerencias.yview)
+                sb.pack(side=RIGHT, fill=Y)
+                self.lista_sugerencias.pack(fill=BOTH, expand=True)
+
+                self.lista_sugerencias.bind("<Double-1>", self._seleccionar_sugerencia)
+                self.lista_sugerencias.bind("<Return>",   self._seleccionar_sugerencia)
+
+            self._popup.geometry(f"{ew}x{min(len(resultados), 8) * 24 + 8}+{ex}+{ey}")
+
+            self.lista_sugerencias.delete(0, END)
             for cod, desc in resultados:
                 producto = DatabaseManager.buscar_producto_por_codigo(cod)
                 precio = producto['precio_compra'] if producto else 0
@@ -127,25 +170,17 @@ class LiquidadorWindow:
                     END,
                     f"{cod} - {desc} - {format_precio_display(precio)}"
                 )
-
-            x = self.entry_busqueda.winfo_rootx() - self.window.winfo_rootx()
-            y = (self.entry_busqueda.winfo_rooty() - self.window.winfo_rooty()
-                 + self.entry_busqueda.winfo_height() + 10)
-
-            self.lista_sugerencias.place(
-                x=x, y=y,
-                width=self.entry_busqueda.winfo_width()
-            )
         else:
-            self.lista_sugerencias.place_forget()
+            self._cerrar_popup()
 
     def _seleccionar_sugerencia(self, event):
-        if not self.lista_sugerencias.curselection():
+        if not self.lista_sugerencias or not self.lista_sugerencias.curselection():
             return
 
         seleccion = self.lista_sugerencias.get(
             self.lista_sugerencias.curselection()
         )
+        self._cerrar_popup()
         partes = seleccion.split(" - ")
 
         codigo        = partes[0].strip()
@@ -161,7 +196,6 @@ class LiquidadorWindow:
 
         self.entry_busqueda.delete(0, END)
         self.entry_busqueda.insert(0, codigo)
-        self.lista_sugerencias.place_forget()
 
         # ── Actualizar labels del producto seleccionado ───────────────────────
         self.lbl_producto.config(text=descripcion)
