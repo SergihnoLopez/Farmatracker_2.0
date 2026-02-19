@@ -1,15 +1,9 @@
 """
-Ventana principal de la aplicación
-✅ MIGRADO A CUSTOMTKINTER
-✅ CORREGIDO: Usa video MP4 con OpenCV (cv2)
-✅ CORREGIDO: Maximiza ventana DESPUÉS de configurar UI
-
-Elimina TOTALMENTE:
-- tk.Tk → ctk.CTk
-- tk.Frame → ctk.CTkFrame
-- tk.Label → ctk.CTkLabel
-- tk.Button → ctk.CTkButton
-- GIF animado → Video MP4 con OpenCV
+Ventana principal - FarmaTrack / Droguería Irlandesa
+✅ Sin texto encima de los botones (quitado FARMATRACK / Droguería Irlandesa del sidebar)
+✅ Botones centrados verticalmente en el sidebar
+✅ Video MP4 en tamaño ORIGINAL (sin resize forzado)
+✅ 10 botones en 1 sola columna, todos con Colors.PRIMARY
 """
 
 import customtkinter as ctk
@@ -24,108 +18,114 @@ import logging
 from PIL import Image, ImageTk
 import tkinter as tk
 
-# Importar OpenCV para reproducir video
 try:
     import cv2
     VIDEO_DISPONIBLE = True
 except ImportError:
     VIDEO_DISPONIBLE = False
-    logging.warning("OpenCV no está instalado. Instala con: pip install opencv-python")
+    logging.warning("OpenCV no instalado. Instala con: pip install opencv-python")
 
 
 class MainWindow:
-    """Ventana principal del sistema - CustomTkinter"""
+    """Ventana principal del sistema"""
 
     def __init__(self):
-        # ✅ ctk.CTk en lugar de tk.Tk
         self.root = ctk.CTk()
         self.root.title("FarmaProStocker - Droguería Irlandesa")
-
-        # ✅ fg_color en lugar de configure(bg=)
         self.root.configure(fg_color=Colors.BACKGROUND)
 
-        # Variables para el video
-        self.video_capture = None
-        self.video_label = None
+        self.video_capture  = None
+        self.video_label    = None
         self.video_after_id = None
-        self.video_fps = 30  # FPS por defecto
+        self.video_delay    = 33
 
         self._setup_ui()
         self._load_video()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-
-        # ✅ MAXIMIZAR AL FINAL - Después de configurar toda la UI
-        # Usar after() asegura que se ejecute después del renderizado inicial
         self.root.after(10, self._maximizar_ventana)
 
+    # ──────────────────────────────────────────────────────────────────────────
     def _maximizar_ventana(self):
-        """
-        Maximiza la ventana después de que se haya renderizado completamente.
-        Se ejecuta 10ms después de la inicialización para evitar conflictos con CustomTkinter.
-        """
         try:
-            # Método principal para Windows
             self.root.state("zoomed")
-            logging.info("Ventana maximizada con state('zoomed')")
-        except Exception as e:
-            logging.warning(f"state('zoomed') falló: {e}")
-            # Fallback para diferentes plataformas
+        except Exception:
             try:
-                # Linux/Mac
-                self.root.attributes('-zoomed', True)
-                logging.info("Ventana maximizada con attributes('-zoomed')")
-            except Exception as e2:
-                logging.warning(f"attributes('-zoomed') falló: {e2}")
-                # Último recurso: geometry manual
+                self.root.attributes("-zoomed", True)
+            except Exception:
                 try:
-                    screen_width = self.root.winfo_screenwidth()
-                    screen_height = self.root.winfo_screenheight()
-                    self.root.geometry(f"{screen_width}x{screen_height}+0+0")
-                    logging.info(f"Ventana maximizada con geometry manual: {screen_width}x{screen_height}")
-                except Exception as e3:
-                    logging.error(f"No se pudo maximizar la ventana: {e3}")
+                    w = self.root.winfo_screenwidth()
+                    h = self.root.winfo_screenheight()
+                    self.root.geometry(f"{w}x{h}+0+0")
+                except Exception as exc:
+                    logging.error(f"No se pudo maximizar: {exc}")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # LAYOUT
+    # ──────────────────────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        """Configura la interfaz de usuario"""
-        # ✅ CTkFrame en lugar de Frame
+        # ── Sidebar izquierdo ─────────────────────────────────────────────────
+        self.sidebar = ctk.CTkFrame(
+            self.root,
+            fg_color=Colors.SURFACE,
+            corner_radius=0,
+            width=265
+        )
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        # Frame interior que centra los botones verticalmente
+        # Se logra con un frame que crece y empuja desde arriba y abajo
+        self.frame_botones = ctk.CTkScrollableFrame(
+            self.sidebar,
+            fg_color="transparent",
+            scrollbar_button_color=Colors.PRIMARY,
+            scrollbar_button_hover_color=Colors.PRIMARY_HOVER,
+        )
+        # expand=True + fill="both" hace que el scrollable ocupe todo el sidebar
+        # Los botones quedan centrados porque pack los coloca desde el centro
+        # cuando el frame tiene más espacio del que necesitan
+        self.frame_botones.pack(
+            fill="both",
+            expand=True,
+            padx=8,
+            pady=0      # sin margen extra — el centrado lo dan los spacers internos
+        )
+
+        # ── Área central ──────────────────────────────────────────────────────
         self.main_frame = ctk.CTkFrame(
             self.root,
             fg_color=Colors.SURFACE,
             corner_radius=0
         )
-        self.main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+        self.main_frame.pack(side="right", expand=True, fill="both")
 
-        # ✅ Label de tkinter para mostrar frames del video
-        self.video_label = tk.Label(
-            self.main_frame,
-            bg=Colors.SURFACE
-        )
-        self.video_label.pack(pady=10)
+        # Label nativo de tkinter para los frames del video
+        self.video_label = tk.Label(self.main_frame, bg=Colors.SURFACE)
+        self.video_label.pack(pady=(40, 8))
 
-        # ✅ CTkLabel para títulos
-        title = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.main_frame,
             text="FARMATRACK",
-            font=(Fonts.FAMILY, 84, "bold"),
-            text_color=Colors.PRIMARY
-        )
-        title.pack()
+            font=(Fonts.FAMILY, 74, "bold"),
+            text_color=Colors.PRIMARY,
+        ).pack()
 
-        subtitle = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.main_frame,
             text="Droguería Irlandesa",
-            font=(Fonts.FAMILY, 56, "bold"),
-            text_color=Colors.PRIMARY
-        )
-        subtitle.pack(pady=(0, 50))
+            font=(Fonts.FAMILY, 46, "bold"),
+            text_color=Colors.PRIMARY,
+        ).pack(pady=(0, 40))
 
-        # Crear botones del menú principal
         self._create_buttons()
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # BOTONES — 1 columna centrada verticalmente
+    # ──────────────────────────────────────────────────────────────────────────
+
     def _create_buttons(self):
-        """Crea los botones del menú principal"""
-        # Importación condicional de ventanas
         try:
             from views.backup_window import BackupWindow
             BACKUP_DISPONIBLE = True
@@ -133,187 +133,135 @@ class MainWindow:
             BACKUP_DISPONIBLE = False
             logging.warning("Módulo de backups no disponible")
 
-        # ✅ Importar ventanas necesarias
-        from views.venta_window import VentaWindow
-        from views.inventario_window import InventarioWindow
-        from views.pedidos_window import PedidosWindow
+        from views.venta_window            import VentaWindow
+        from views.inventario_window       import InventarioWindow
+        from views.pedidos_window          import PedidosWindow
         from views.agregar_producto_window import AgregarProductoWindow
-        from views.liquidador_window import LiquidadorWindow
-        from views.actualizador_window import ActualizadorWindow
-        from views.verificacion_window import VerificacionWindow
+        from views.liquidador_window       import LiquidadorWindow
+        from views.actualizador_window     import ActualizadorWindow
+        from views.verificacion_window     import VerificacionWindow
+        from views.tension_window          import TensionWindow
+        from views.pedido_centro_window    import PedidoCentroWindow
+        from views.reporte_ventas_window   import ReporteVentasWindow
 
-        # ✅ Frame para primera fila de botones
-        frame_botones1 = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=Colors.SURFACE,
-            corner_radius=0
-        )
-        frame_botones1.pack()
-
-        # Primera fila de botones
-        botones1 = [
-            ("💰 Registrar Venta", lambda: VentaWindow(self.root)),
-            ("📦 Ver Inventario", lambda: InventarioWindow(self.root)),
-            ("➕ Agregar Producto", lambda: AgregarProductoWindow(self.root)),
-            ("📋 Módulo de Pedidos", lambda: PedidosWindow(self.root))
+        botones = [
+            ("💰  Registrar Venta",       lambda: VentaWindow(self.root)),
+            ("📦  Ver Inventario",         lambda: InventarioWindow(self.root)),
+            ("➕  Agregar Producto",        lambda: AgregarProductoWindow(self.root)),
+            ("📋  Módulo de Pedidos",      lambda: PedidosWindow(self.root)),
+            ("💵  Liquidador",             lambda: LiquidadorWindow(self.root)),
+            ("🔄  Actualizar Inventario",  lambda: ActualizadorWindow(self.root)),
+            ("✅  Verificación Rápida",    lambda: VerificacionWindow(self.root)),
+            ("💾  Backups",
+             (lambda: BackupWindow(self.root)) if BACKUP_DISPONIBLE
+             else (lambda: None)),
+            ("🩺  Toma de Tensión",        lambda: TensionWindow(self.root)),
+            ("🏬  Pedido Centro",          lambda: PedidoCentroWindow(self.root)),
+            ("📊  Reporte de Ventas",      lambda: ReporteVentasWindow(self.root)),
         ]
 
-        for texto, comando in botones1:
-            btn = CTkPrimaryButton(
-                frame_botones1,
-                text=texto,
-                command=comando,
-                width=220,
-                height=Dimensions.BUTTON_HEIGHT
-            )
-            btn.pack(side="left", padx=10)
+        n = len(botones)    # 10 botones
+        BTN_H   = Dimensions.BUTTON_HEIGHT   # altura de cada botón (46 px)
+        GAP     = 8                           # espacio entre botones
+        total_h = n * BTN_H + (n - 1) * GAP  # alto total del bloque de botones
 
-        # ✅ Frame para segunda fila de botones
-        frame_botones2 = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=Colors.SURFACE,
-            corner_radius=0
+        # Spacer superior que empuja los botones hacia el centro
+        # (usa place/pack trick: un frame transparente que se expande)
+        top_spacer = ctk.CTkFrame(
+            self.frame_botones, fg_color="transparent", height=1
         )
-        frame_botones2.pack(pady=10)
+        top_spacer.pack(expand=True, fill="both")
 
-        # Segunda fila de botones
-        botones2 = [
-            ("💵 Liquidador", lambda: LiquidadorWindow(self.root)),
-            ("🔄 Actualizar Inventario", lambda: ActualizadorWindow(self.root)),
-            ("✅ Verificación Rápida", lambda: VerificacionWindow(self.root))
-        ]
+        # Espacio equivalente a 2 botones antes del primero
+        # 2 × BTN_H (46) + 2 × GAP (8) = 108 px
+        TOP_OFFSET = 2 * (BTN_H + GAP)
 
-        for texto, comando in botones2:
+        # Botones
+        for idx, (texto, comando) in enumerate(botones):
             btn = CTkPrimaryButton(
-                frame_botones2,
+                self.frame_botones,
                 text=texto,
                 command=comando,
-                width=220,
-                height=Dimensions.BUTTON_HEIGHT
+                width=238,
+                height=BTN_H,
+                anchor="w",
             )
-            btn.pack(side="left", padx=10)
+            btn.configure(
+                fg_color=Colors.PRIMARY,
+                hover_color=Colors.PRIMARY_HOVER,
+            )
+            # El primer botón lleva el margen superior extra
+            top_pad = TOP_OFFSET if idx == 0 else 0
+            btn.pack(fill="x", pady=(top_pad, GAP), padx=2)
 
-        # ✅ Botón de backups (solo si está disponible)
-        if BACKUP_DISPONIBLE:
-            btn_backup = CTkPrimaryButton(
-                frame_botones2,
-                text="💾 Backups",
-                command=lambda: BackupWindow(self.root),
-                width=220,
-                height=Dimensions.BUTTON_HEIGHT,
-                fg_color=Colors.SUCCESS  # Verde para destacarlo
-            )
-            btn_backup.pack(side="left", padx=10)
+        # Spacer inferior simétrico
+        bot_spacer = ctk.CTkFrame(
+            self.frame_botones, fg_color="transparent", height=1
+        )
+        bot_spacer.pack(expand=True, fill="both")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # VIDEO MP4 — tamaño ORIGINAL del archivo (sin resize)
+    # ──────────────────────────────────────────────────────────────────────────
 
     def _load_video(self):
-        """
-        Carga y reproduce el video MP4 usando OpenCV
-        ✅ Usa cv2.VideoCapture para leer frames
-        ✅ Mantiene dimensiones originales del video
-        ✅ Reproduce en loop infinito
-        """
         if not VIDEO_DISPONIBLE:
-            logging.warning("OpenCV no disponible, video no se mostrará")
             return
 
         video_path = RESOURCES_DIR / "escudo_vector_farmacia_tecnologia.mp4"
-
         if not video_path.exists():
             logging.warning(f"Video no encontrado: {video_path}")
             return
 
         try:
-            # Abrir el video con OpenCV
             self.video_capture = cv2.VideoCapture(str(video_path))
-
             if not self.video_capture.isOpened():
-                logging.error(f"No se pudo abrir el video: {video_path}")
+                logging.error("OpenCV no pudo abrir el video")
                 return
 
-            # Obtener FPS del video
             fps = self.video_capture.get(cv2.CAP_PROP_FPS)
-            self.video_fps = int(fps) if fps > 0 else 30
+            self.video_delay = max(1, int(1000 / (fps if fps > 0 else 30)))
 
-            # Calcular delay entre frames (en milisegundos)
-            self.video_delay = int(1000 / self.video_fps)
+            vw = int(self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            vh = int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            logging.info(
+                f"Video: {video_path.name} {vw}x{vh} @ {fps:.1f}fps (tamaño original)"
+            )
 
-            # Obtener dimensiones del video
-            width = int(self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-            logging.info(f"Video cargado: {video_path.name} ({width}x{height}px @ {self.video_fps}fps)")
-
-            # Iniciar reproducción
             self._update_video_frame()
 
-        except Exception as e:
-            logging.error(f"Error al cargar video: {e}")
+        except Exception as exc:
+            logging.error(f"Error cargando video: {exc}")
 
     def _update_video_frame(self):
-        """
-        Actualiza el frame actual del video
-        Se llama recursivamente para crear el efecto de video
-        """
         if not self.video_capture or not self.video_capture.isOpened():
             return
 
-        # Leer siguiente frame
         ret, frame = self.video_capture.read()
-
         if not ret:
-            # Si llegamos al final del video, reiniciar desde el principio
+            # Loop: volver al inicio
             self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = self.video_capture.read()
 
         if ret:
-            # Convertir de BGR (OpenCV) a RGB (PIL/Tkinter)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Convertir a PIL Image
-            img = Image.fromarray(frame_rgb)
-
-            # Convertir a PhotoImage para tkinter
-            photo = ImageTk.PhotoImage(image=img)
-
-            # Actualizar el label con el nuevo frame
+            # Sin resize — dimensiones originales del video
+            rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            photo = ImageTk.PhotoImage(image=Image.fromarray(rgb))
             self.video_label.configure(image=photo)
-            self.video_label.image = photo  # Mantener referencia
+            self.video_label.image = photo   # referencia obligatoria para evitar GC
 
-        # Programar siguiente actualización
-        self.video_after_id = self.root.after(self.video_delay, self._update_video_frame)
+        self.video_after_id = self.root.after(
+            self.video_delay, self._update_video_frame
+        )
 
+    # ──────────────────────────────────────────────────────────────────────────
     def _on_close(self):
-        """Maneja el cierre de la ventana"""
-        # Detener actualización de frames
         if self.video_after_id:
             self.root.after_cancel(self.video_after_id)
-
-        # Liberar recursos de OpenCV
         if self.video_capture:
             self.video_capture.release()
-
-        # Cerrar aplicación
         self.root.quit()
         self.root.destroy()
 
     def run(self):
-        """Ejecuta el mainloop"""
         self.root.mainloop()
-
-
-# ==============================================================================
-# EJEMPLO DE USO
-# ==============================================================================
-
-if __name__ == "__main__":
-    import customtkinter as ctk
-    from ctk_design_system import initialize_customtkinter
-
-    # ✅ Inicializar ANTES de crear ventanas
-    ctk.set_appearance_mode("light")
-    ctk.set_default_color_theme("blue")
-    initialize_customtkinter()
-
-    # Crear y ejecutar aplicación
-    app = MainWindow()
-    app.run()
