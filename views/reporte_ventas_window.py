@@ -220,7 +220,7 @@ class ReporteVentasWindow:
         encabezados = {
             "id":     ("ID",          60,  "center"),
             "fecha":  ("Fecha",       160, "center"),
-            "total":  ("Total",       130, "right"),
+            "total":  ("Total",       130, "e"),
             "n_prod": ("Productos",   90,  "center"),
             "cajero": ("Cajero",      110, "center"),
         }
@@ -282,13 +282,13 @@ class ReporteVentasWindow:
 
         self.tree_det.heading("descripcion", text="Producto", anchor="w")
         self.tree_det.heading("cant",        text="Cant",     anchor="center")
-        self.tree_det.heading("precio",      text="Precio",   anchor="right")
-        self.tree_det.heading("subtotal",    text="Subtotal", anchor="right")
+        self.tree_det.heading("precio",      text="Precio",   anchor="e")
+        self.tree_det.heading("subtotal",    text="Subtotal", anchor="e")
 
         self.tree_det.column("descripcion", width=170, anchor="w")
         self.tree_det.column("cant",        width=45,  anchor="center")
-        self.tree_det.column("precio",      width=78,  anchor="right")
-        self.tree_det.column("subtotal",    width=80,  anchor="right")
+        self.tree_det.column("precio",      width=78,  anchor="e")
+        self.tree_det.column("subtotal",    width=80,  anchor="e")
 
         sb2.pack(side="right", fill="y", padx=(0, 2))
         self.tree_det.pack(fill="both", expand=True, padx=(14, 0), pady=(0, 8))
@@ -309,9 +309,11 @@ class ReporteVentasWindow:
         res = tk.Frame(pie, bg=Colors.SURFACE)
         res.pack(side="left", padx=20, pady=8)
 
-        self.lbl_n_ventas   = self._stat(res, "Ventas",   "0",   "#1565C0")
-        self.lbl_total_per  = self._stat(res, "Total",    "$0",  Colors.SUCCESS)
-        self.lbl_promedio   = self._stat(res, "Promedio", "$0",  "#6a1b9a")
+        self.lbl_n_ventas   = self._stat(res, "Ventas",    "0",    "#1565C0")
+        self.lbl_total_per  = self._stat(res, "Total",     "$0",   Colors.SUCCESS)
+        self.lbl_promedio   = self._stat(res, "Promedio",  "$0",   "#6a1b9a")
+        self.lbl_ganancia   = self._stat(res, "Ganancia",  "$0",   "#e65100")
+        self.lbl_utilidad   = self._stat(res, "Utilidad",  "0.0%", "#2e7d32")
 
         # Botones de acción
         botones = tk.Frame(pie, bg=Colors.SURFACE)
@@ -417,14 +419,43 @@ class ReporteVentasWindow:
                              ),
                              tags=(tag,))
 
+    def _calcular_costo_venta(self, venta: dict) -> float:
+        """Calcula el costo total de una venta consultando precio_compra en la BD."""
+        import sqlite3
+        from config.settings import DB_PATH
+        costo = 0.0
+        try:
+            conn = sqlite3.connect(str(DB_PATH))
+            cursor = conn.cursor()
+            for prod in venta.get("productos", []):
+                codigo   = prod.get("codigo", "")
+                cantidad = int(prod.get("cantidad", 0))
+                cursor.execute(
+                    "SELECT precio_compra FROM productos WHERE codigo_barras = ?",
+                    (codigo,)
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    costo += float(row[0]) * cantidad
+            conn.close()
+        except Exception as e:
+            logging.warning(f"No se pudo calcular costo de venta {venta.get('id')}: {e}")
+        return costo
+
     def _actualizar_resumen(self):
         n      = len(self._ventas_actuales)
         total  = sum(v["total"] for v in self._ventas_actuales)
         prom   = total / n if n else 0
 
+        costo_total = sum(self._calcular_costo_venta(v) for v in self._ventas_actuales)
+        ganancia    = total - costo_total
+        utilidad    = (ganancia / total * 100) if total > 0 else 0.0
+
         self.lbl_n_ventas.config(text=str(n))
         self.lbl_total_per.config(text=_fmt(total))
         self.lbl_promedio.config(text=_fmt(prom))
+        self.lbl_ganancia.config(text=_fmt(ganancia))
+        self.lbl_utilidad.config(text=f"{utilidad:.1f}%")
 
     def _limpiar_detalle(self):
         self.lbl_id.config(text="—")

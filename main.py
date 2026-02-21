@@ -188,6 +188,109 @@ def inicializar_configuracion():
 # MAIN
 # ==============================================================================
 
+
+
+def migrar_base_datos():
+    """
+    Aplica migraciones a la BD (idempotente).
+    Detecta la estructura real de 'ventas' y la corrige
+    sin importar cuantas columnas le falten, preservando datos.
+    """
+    import sqlite3
+    from config.settings import DB_PATH
+
+    ESTRUCTURA_CORRECTA = {
+        "id_venta":  "INTEGER PRIMARY KEY AUTOINCREMENT",
+        "fecha":     "TEXT NOT NULL DEFAULT ''",
+        "total":     "REAL NOT NULL DEFAULT 0",
+        "productos": "TEXT",
+        "cajero":    "TEXT DEFAULT 'Principal'",
+    }
+    COLUMNAS_ALTER = {
+        "cajero":    "TEXT DEFAULT 'Principal'",
+        "productos": "TEXT",
+    }
+
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        cursor = conn.cursor()
+
+        # Verificar si tabla ventas existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ventas'")
+        if not cursor.fetchone():
+            cursor.execute("""
+                CREATE TABLE ventas (
+                    id_venta  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha     TEXT NOT NULL DEFAULT '',
+                    total     REAL NOT NULL DEFAULT 0,
+                    productos TEXT,
+                    cajero    TEXT DEFAULT 'Principal'
+                )
+            """)
+            conn.commit()
+            conn.close()
+            print("Migracion: tabla ventas creada desde cero")
+            return
+
+        # Columnas actuales
+        cursor.execute("PRAGMA table_info(ventas)")
+        info = cursor.fetchall()
+        cols_existentes = {row[1] for row in info}
+        col_list = [row[1] for row in info]
+        print(f"   BD ventas columnas actuales: {cols_existentes}")
+
+        faltantes = set(ESTRUCTURA_CORRECTA.keys()) - cols_existentes
+        if not faltantes:
+            conn.close()
+            return
+
+        print(f"   Columnas faltantes en ventas: {faltantes}")
+
+        # Columnas criticas (total, fecha) requieren recrear la tabla
+        criticas = faltantes - set(COLUMNAS_ALTER.keys())
+
+        if criticas:
+            print(f"   Columnas criticas faltantes {criticas} - recreando tabla...")
+            cursor.execute("SELECT * FROM ventas")
+            filas = cursor.fetchall()
+            cursor.execute("ALTER TABLE ventas RENAME TO _ventas_old")
+            cursor.execute("""
+                CREATE TABLE ventas (
+                    id_venta  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha     TEXT NOT NULL DEFAULT '',
+                    total     REAL NOT NULL DEFAULT 0,
+                    productos TEXT,
+                    cajero    TEXT DEFAULT 'Principal'
+                )
+            """)
+            cols_comunes = [c for c in col_list if c in ESTRUCTURA_CORRECTA]
+            if filas and cols_comunes:
+                ph  = ", ".join("?" * len(cols_comunes))
+                cn  = ", ".join(cols_comunes)
+                idx = [col_list.index(c) for c in cols_comunes]
+                for fila in filas:
+                    cursor.execute(
+                        f"INSERT INTO ventas ({cn}) VALUES ({ph})",
+                        [fila[i] for i in idx]
+                    )
+                print(f"   {len(filas)} registros migrados")
+            cursor.execute("DROP TABLE _ventas_old")
+        else:
+            for col in faltantes:
+                ddl = COLUMNAS_ALTER[col]
+                cursor.execute(f"ALTER TABLE ventas ADD COLUMN {col} {ddl}")
+                print(f"   Columna {col} agregada a ventas")
+
+        conn.commit()
+        conn.close()
+        print("Migracion de ventas completada OK")
+
+    except Exception as e:
+        print(f"Error en migracion BD: {e}")
+        import logging
+        logging.error(f"Error en migrar_base_datos: {e}", exc_info=True)
+
+
 def main():
     """Función principal"""
     print("=" * 60)
@@ -210,6 +313,10 @@ def main():
         print("🔍 Verificando base de datos...")
         verificar_base_datos()
         print("✅ Base de datos OK")
+
+        print("🔧 Aplicando migraciones...")
+        migrar_base_datos()
+        print("✅ Migraciones OK")
 
         print("🔍 Inicializando configuración...")
         inicializar_configuracion()
