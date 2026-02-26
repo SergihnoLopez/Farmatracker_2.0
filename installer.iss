@@ -12,6 +12,7 @@ WizardStyle=modern
 
 [Files]
 Source: "dist\FarmaTrack.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "installer_files\farma_pro_stocker.db"; DestDir: "{app}\default_db"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\FarmaTrack"; Filename: "{app}\FarmaTrack.exe"

@@ -12,12 +12,16 @@ APP_VERSION = "1.0"
 MAIN_FILE = "main.py"
 ICON_PATH = "resources/icono.ico"
 
+# Base de datos por defecto
+DB_FILE = "farma_pro_stocker.db"
+
 # Ruta donde está instalado Inno Setup
 INNO_COMPILER = r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
 BASE_DIR = Path(__file__).parent
 DIST_DIR = BASE_DIR / "dist"
 BUILD_DIR = BASE_DIR / "build"
+
 
 # ==============================
 # LIMPIAR BUILDS ANTERIORES
@@ -40,7 +44,18 @@ def limpiar_builds():
 # ==============================
 # GENERAR EJECUTABLE
 # ==============================
+def preparar_base_datos_instalador():
+    print("📦 Preparando base de datos para instalador...")
 
+    db_path = BASE_DIR / DB_FILE
+    installer_db_dir = BASE_DIR / "installer_files"
+    installer_db_dir.mkdir(exist_ok=True)
+
+    if db_path.exists():
+        shutil.copy2(db_path, installer_db_dir / DB_FILE)
+        print("✅ Base de datos copiada para instalador\n")
+    else:
+        print("⚠ No se encontró database.db\n")
 def generar_exe():
     print("⚙ Generando ejecutable con PyInstaller...")
 
@@ -85,6 +100,7 @@ WizardStyle=modern
 
 [Files]
 Source: "dist\\{APP_NAME}.exe"; DestDir: "{{app}}"; Flags: ignoreversion
+Source: "installer_files\\{DB_FILE}"; DestDir: "{{app}}\\default_db"; Flags: ignoreversion
 
 [Icons]
 Name: "{{group}}\\{APP_NAME}"; Filename: "{{app}}\\{APP_NAME}.exe"
@@ -131,11 +147,11 @@ def main():
 
     limpiar_builds()
     generar_exe()
+    preparar_base_datos_instalador()
     iss_path = generar_script_inno()
     compilar_instalador(iss_path)
 
     print("🎉 PROCESO COMPLETADO")
-    print("Busca tu instalador en la carpeta del proyecto.")
 
 
 if __name__ == "__main__":

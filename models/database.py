@@ -53,6 +53,79 @@ class DatabaseManager:
     """Gestor centralizado de operaciones de base de datos"""
 
     @staticmethod
+    def inicializar_tablas():
+        """
+        Crea todas las tablas necesarias si no existen.
+        Seguro de llamar en cada arranque: no borra datos existentes.
+        """
+        import sqlite3 as _sq3
+        try:
+            conn = _sq3.connect(str(DB_PATH))
+            cur  = conn.cursor()
+
+            # ── Tabla productos ───────────────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS productos (
+                    id_producto      INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo_barras    TEXT UNIQUE NOT NULL,
+                    descripcion      TEXT,
+                    proveedor        TEXT,
+                    unidad           TEXT,
+                    cantidad         REAL    DEFAULT 0,
+                    precio_compra    REAL    DEFAULT 0,
+                    precio_venta     REAL    DEFAULT 0,
+                    impuesto         TEXT,
+                    bonificacion     REAL    DEFAULT 0,
+                    grupo            TEXT,
+                    subgrupo         TEXT,
+                    fecha_vencimiento TEXT
+                )
+            """)
+
+            # ── Tabla ventas ──────────────────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ventas (
+                    id_venta  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha     TEXT    NOT NULL DEFAULT '',
+                    total     REAL    NOT NULL DEFAULT 0,
+                    productos TEXT,
+                    cajero    TEXT    DEFAULT 'Principal'
+                )
+            """)
+
+            # ── Migraciones de seguridad (columnas faltantes) ─────────────
+            cur.execute("PRAGMA table_info(ventas)")
+            cols_ventas = {r[1] for r in cur.fetchall()}
+            if "fecha"  not in cols_ventas:
+                cur.execute("ALTER TABLE ventas ADD COLUMN fecha TEXT NOT NULL DEFAULT ''")
+                logging.info("Migración: columna 'fecha' agregada a ventas")
+            if "cajero" not in cols_ventas:
+                cur.execute("ALTER TABLE ventas ADD COLUMN cajero TEXT DEFAULT 'Principal'")
+                logging.info("Migración: columna 'cajero' agregada a ventas")
+
+            cur.execute("PRAGMA table_info(productos)")
+            cols_prod = {r[1] for r in cur.fetchall()}
+            if "unidad" not in cols_prod:
+                cur.execute("ALTER TABLE productos ADD COLUMN unidad TEXT")
+                logging.info("Migración: columna 'unidad' agregada a productos")
+            if "bonificacion" not in cols_prod:
+                cur.execute("ALTER TABLE productos ADD COLUMN bonificacion REAL DEFAULT 0")
+                logging.info("Migración: columna 'bonificacion' agregada a productos")
+            if "grupo" not in cols_prod:
+                cur.execute("ALTER TABLE productos ADD COLUMN grupo TEXT")
+                logging.info("Migración: columna 'grupo' agregada a productos")
+            if "subgrupo" not in cols_prod:
+                cur.execute("ALTER TABLE productos ADD COLUMN subgrupo TEXT")
+                logging.info("Migración: columna 'subgrupo' agregada a productos")
+
+            conn.commit()
+            conn.close()
+            logging.info("Base de datos inicializada correctamente.")
+
+        except Exception as e:
+            logging.error(f"Error al inicializar tablas: {e}", exc_info=True)
+
+    @staticmethod
     def buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
         """Busca un producto por código de barras"""
         try:
