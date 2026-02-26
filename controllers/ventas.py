@@ -1,13 +1,29 @@
 """
 Controlador de lógica de ventas
 ✅ MEJORADO: Validación de stock bloqueante + Registro completo de ventas
+✅ NUEVO: Soporte para cantidades decimales (fraccionamiento de productos CJ)
 """
 from tkinter import messagebox
 from models.database import DatabaseManager, get_db_connection
-from utils.validators import validate_cantidad, validate_codigo_barras
+from utils.validators import validate_codigo_barras
 from datetime import datetime
 import json
 import logging
+
+
+def _parse_cantidad(valor_str) -> float | None:
+    """
+    Convierte el valor de cantidad a float.
+    Acepta enteros (3) y decimales (0.1, 0.333...) para fracciones de CJ.
+    Retorna None si el valor es inválido.
+    """
+    try:
+        v = float(str(valor_str).strip())
+        if v <= 0:
+            return None
+        return v
+    except (ValueError, TypeError):
+        return None
 
 
 class VentasController:
@@ -16,8 +32,9 @@ class VentasController:
     @staticmethod
     def agregar_producto_a_venta(tree, codigo_entry, cantidad_entry):
         """
-        Agrega un producto al treeview de venta
-        ✅ MEJORADO: Validación de stock bloqueante
+        Agrega un producto al treeview de venta.
+        ✅ MEJORADO: Validación de stock bloqueante.
+        ✅ NUEVO: Cantidad acepta decimales para fraccionamiento CJ.
         """
         codigo = codigo_entry.get().strip()
         cantidad_str = cantidad_entry.get().strip() or "1"
@@ -27,7 +44,7 @@ class VentasController:
             messagebox.showerror("Error", "Código de barras inválido")
             return False
 
-        cantidad = validate_cantidad(cantidad_str)
+        cantidad = _parse_cantidad(cantidad_str)
         if cantidad is None:
             messagebox.showerror("Error", "Cantidad inválida")
             return False
@@ -40,7 +57,7 @@ class VentasController:
             return False
 
         # ✅ VALIDACIÓN DE STOCK BLOQUEANTE
-        stock_disponible = producto['cantidad']
+        stock_disponible = float(producto['cantidad'])
 
         if stock_disponible < cantidad:
             messagebox.showerror(
@@ -49,17 +66,17 @@ class VentasController:
                 f"Producto: {producto['descripcion']}\n"
                 f"Stock disponible: {stock_disponible} unidades\n"
                 f"Cantidad solicitada: {cantidad} unidades\n\n"
-                f"Diferencia: Faltan {cantidad - stock_disponible} unidades\n\n"
+                f"Diferencia: Faltan {cantidad - stock_disponible:.3f} unidades\n\n"
                 "La venta NO puede continuar."
             )
             return False
 
         # Advertencia si queda poco stock después de la venta
         stock_restante = stock_disponible - cantidad
-        if stock_restante > 0 and stock_restante <= 5:
+        if 0 < stock_restante <= 5:
             messagebox.showwarning(
                 "⚠️ Stock Bajo",
-                f"Después de esta venta quedarán solo {stock_restante} unidades.\n\n"
+                f"Después de esta venta quedarán solo {stock_restante:.3f} unidades.\n\n"
                 f"Considera hacer un pedido pronto."
             )
 
@@ -68,10 +85,13 @@ class VentasController:
         subtotal = precio_unitario * cantidad
 
         # Agregar al treeview
+        # Mostrar cantidad: si es entero exacto, sin decimales; si es fracción, con decimales
+        cantidad_display = int(cantidad) if cantidad == int(cantidad) else round(cantidad, 6)
+
         tree.insert("", "end", values=(
             producto['codigo_barras'],
             producto['descripcion'],
-            cantidad,
+            cantidad_display,
             precio_unitario,
             subtotal,
             producto.get('impuesto', '')
@@ -86,8 +106,9 @@ class VentasController:
     @staticmethod
     def registrar_venta(tree):
         """
-        Registra la venta y actualiza inventario
-        ✅ MEJORADO: Registra en tabla ventas + validaciones adicionales
+        Registra la venta y actualiza inventario.
+        ✅ MEJORADO: Registra en tabla ventas + validaciones adicionales.
+        ✅ NUEVO: Soporta cantidades decimales para fracciones de CJ.
         """
         items = tree.get_children()
 
@@ -107,7 +128,15 @@ class VentasController:
                 for item in items:
                     valores = tree.item(item, "values")
                     codigo = valores[0]
-                    cantidad_vendida = int(valores[2])
+
+                    # ✅ Cantidad puede ser decimal (fracción de CJ)
+                    cantidad_vendida = _parse_cantidad(valores[2])
+                    if cantidad_vendida is None:
+                        messagebox.showerror(
+                            "Error de datos",
+                            f"Cantidad inválida para el producto {codigo}"
+                        )
+                        return False
 
                     # Verificar stock actual antes de proceder
                     cursor.execute(
@@ -116,13 +145,13 @@ class VentasController:
                     )
                     row = cursor.fetchone()
 
-                    if not row or row[0] < cantidad_vendida:
-                        stock_actual = row[0] if row else 0
+                    if not row or float(row[0]) < cantidad_vendida:
+                        stock_actual = float(row[0]) if row else 0
                         messagebox.showerror(
                             "Error de Stock",
                             f"❌ Stock insuficiente para {codigo}\n\n"
-                            f"Stock actual: {stock_actual}\n"
-                            f"Cantidad requerida: {cantidad_vendida}\n\n"
+                            f"Stock actual: {stock_actual:.3f}\n"
+                            f"Cantidad requerida: {cantidad_vendida:.3f}\n\n"
                             "La venta ha sido CANCELADA."
                         )
                         return False
@@ -152,14 +181,18 @@ class VentasController:
                 venta_id = cursor.lastrowid
                 logging.info(f"Venta registrada - ID: {venta_id}, Total: ${total:,.2f}")
 
-                # ✅ ACTUALIZAR INVENTARIO
+                # ✅ ACTUALIZAR INVENTARIO (soporta decimales para fraccionamiento CJ)
                 productos_actualizados = 0
                 for producto in productos_venta:
                     cursor.execute("""
                         UPDATE productos 
                         SET cantidad = cantidad - ? 
                         WHERE codigo_barras = ? AND cantidad >= ?
-                    """, (producto['cantidad'], producto['codigo'], producto['cantidad']))
+                    """, (
+                        producto['cantidad'],
+                        producto['codigo'],
+                        producto['cantidad']
+                    ))
 
                     if cursor.rowcount == 0:
                         raise Exception(
@@ -188,118 +221,68 @@ class VentasController:
             return False
 
     @staticmethod
-    def obtener_historial_ventas(limite: int = 100):
-        """
-        ✅ NUEVO: Obtiene el historial de ventas registradas
-
-        Args:
-            limite: Número máximo de ventas a retornar
-
-        Returns:
-            Lista de ventas con sus detalles
-        """
+    def obtener_historial_ventas(limite: int = 50):
+        """Obtiene el historial de ventas"""
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT id_venta, fecha, total, productos, cajero
                     FROM ventas
-                    ORDER BY fecha DESC
+                    ORDER BY id_venta DESC
                     LIMIT ?
                 """, (limite,))
 
+                rows = cursor.fetchall()
                 ventas = []
-                for row in cursor.fetchall():
-                    venta = {
-                        'id': row[0],
-                        'fecha': row[1],
-                        'total': row[2],
-                        'productos': json.loads(row[3]) if row[3] else [],
-                        'cajero': row[4]
-                    }
-                    ventas.append(venta)
+                for row in rows:
+                    try:
+                        productos = json.loads(row['productos']) if row['productos'] else []
+                    except Exception:
+                        productos = []
+
+                    ventas.append({
+                        'id':          row['id_venta'],
+                        'fecha':       row['fecha'],
+                        'total':       float(row['total']),
+                        'productos':   productos,
+                        'cajero':      row['cajero'],
+                        'n_productos': len(productos)
+                    })
 
                 return ventas
 
         except Exception as e:
-            logging.error(f"Error al obtener historial de ventas: {e}")
+            logging.error(f"Error al obtener historial: {e}")
             return []
 
     @staticmethod
-    def obtener_venta_por_id(venta_id: int):
-        """
-        ✅ NUEVO: Obtiene detalles de una venta específica
-
-        Args:
-            venta_id: ID de la venta
-
-        Returns:
-            Diccionario con detalles de la venta o None
-        """
+    def obtener_venta_por_id(id_venta: int):
+        """Obtiene una venta específica por ID"""
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT id_venta, fecha, total, productos, cajero
-                    FROM ventas
-                    WHERE id_venta = ?
-                """, (venta_id,))
-
+                cursor.execute(
+                    "SELECT * FROM ventas WHERE id_venta = ?",
+                    (id_venta,)
+                )
                 row = cursor.fetchone()
-                if row:
-                    return {
-                        'id': row[0],
-                        'fecha': row[1],
-                        'total': row[2],
-                        'productos': json.loads(row[3]) if row[3] else [],
-                        'cajero': row[4]
-                    }
-                return None
+                if not row:
+                    return None
 
-        except Exception as e:
-            logging.error(f"Error al obtener venta {venta_id}: {e}")
-            return None
-
-    @staticmethod
-    def calcular_total_ventas_periodo(fecha_inicio: str, fecha_fin: str):
-        """
-        ✅ NUEVO: Calcula el total de ventas en un período
-
-        Args:
-            fecha_inicio: Fecha inicio en formato 'YYYY-MM-DD'
-            fecha_fin: Fecha fin en formato 'YYYY-MM-DD'
-
-        Returns:
-            Diccionario con total, cantidad de ventas, etc.
-        """
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT 
-                        COUNT(*) as num_ventas,
-                        SUM(total) as total_ventas,
-                        AVG(total) as promedio_venta
-                    FROM ventas
-                    WHERE fecha BETWEEN ? AND ?
-                """, (fecha_inicio + ' 00:00:00', fecha_fin + ' 23:59:59'))
-
-                row = cursor.fetchone()
+                try:
+                    productos = json.loads(row['productos']) if row['productos'] else []
+                except Exception:
+                    productos = []
 
                 return {
-                    'num_ventas': row[0] or 0,
-                    'total_ventas': row[1] or 0.0,
-                    'promedio_venta': row[2] or 0.0,
-                    'fecha_inicio': fecha_inicio,
-                    'fecha_fin': fecha_fin
+                    'id':        row['id_venta'],
+                    'fecha':     row['fecha'],
+                    'total':     float(row['total']),
+                    'productos': productos,
+                    'cajero':    row['cajero']
                 }
 
         except Exception as e:
-            logging.error(f"Error al calcular totales del período: {e}")
-            return {
-                'num_ventas': 0,
-                'total_ventas': 0.0,
-                'promedio_venta': 0.0,
-                'fecha_inicio': fecha_inicio,
-                'fecha_fin': fecha_fin
-            }
+            logging.error(f"Error al obtener venta {id_venta}: {e}")
+            return None

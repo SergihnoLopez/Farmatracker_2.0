@@ -13,13 +13,6 @@ from utils.validators import sanitize_sql_column, validate_precio
 from utils.formatters import format_precio_display
 import bcrypt
 from config.settings import PASSWORD_HASH
-
-# AuthManager para control de acceso por rol
-try:
-    from views.login_window import AuthManager
-except ImportError:
-    AuthManager = None
-
 import pandas as pd
 import logging
 
@@ -237,12 +230,10 @@ class InventarioWindow:
         self.menu_contextual.add_command(label="Copiar celda", command=self._copiar_celda)
         self.menu_contextual.add_command(label="Eliminar producto", command=self._eliminar_producto)
         self.menu_contextual.add_separator()
-        # Solo agregar opción de reset si el usuario es admin
-        if AuthManager and AuthManager.es_admin():
-            self.menu_contextual.add_command(
-                label="⚠️ Resetear TODO el stock a 0 (admin)",
-                command=self._resetear_stock
-            )
+        self.menu_contextual.add_command(
+            label="Resetear stock (requiere contraseña)",
+            command=self._resetear_stock
+        )
 
         self.tree.bind("<Button-3>", self._mostrar_menu_contextual)
 
@@ -561,140 +552,70 @@ class InventarioWindow:
                 messagebox.showerror("Error", "No se pudo eliminar el producto")
 
     def _resetear_stock(self):
-        """
-        Resetea todo el stock a 0.
-        Requiere: rol admin + contrasena del admin verificada contra la BD.
-        """
-        import sqlite3 as _sq3
-
-        # Verificar rol
-        if not AuthManager or not AuthManager.es_admin():
-            messagebox.showerror(
-                "Acceso denegado",
-                "Solo el administrador puede resetear el stock.",
-                parent=self.window
-            )
-            return
-
-        # Dialogo de confirmacion + contrasena
-        dlg = Toplevel(self.window)
-        dlg.title("Resetear Stock — Confirmacion Admin")
-        dlg.geometry("400x260")
-        dlg.resizable(False, False)
-        dlg.transient(self.window)
-        dlg.grab_set()
-
-        Frame(dlg, bg="#b71c1c", height=6).pack(fill="x")
+        """Resetea todo el stock a 0 (requiere contraseña)"""
+        # Ventana de contraseña
+        ventana_pass = Toplevel(self.window)
+        ventana_pass.title("Confirmación requerida")
+        ventana_pass.geometry("350x150")
+        ventana_pass.transient(self.window)
+        ventana_pass.grab_set()
 
         Label(
-            dlg,
-            text="⚠️  Resetear TODO el Stock a 0",
-            font=("Segoe UI", 14, "bold"),
-            fg="#b71c1c"
-        ).pack(pady=(14, 4))
-
-        Label(
-            dlg,
-            text="Esta accion pondra en 0 la cantidad de TODOS\n"
-                 "los productos. No se puede deshacer.\n"
-                 "Se recomienda hacer un backup antes.",
-            font=("Segoe UI", 10),
-            fg="#555555",
-            justify="center"
-        ).pack(pady=(0, 12))
-
-        Label(
-            dlg,
-            text="Contrasena de administrador:",
+            ventana_pass,
+            text="Ingrese la contraseña para continuar:",
             font=FONT_STYLE
-        ).pack()
+        ).pack(pady=10)
 
-        entry_pass = Entry(dlg, show="*", font=FONT_STYLE, width=20, justify="center")
-        entry_pass.pack(pady=(4, 14))
+        entry_pass = Entry(ventana_pass, show="*", font=FONT_STYLE, width=15)
+        entry_pass.pack(pady=5)
         entry_pass.focus()
 
-        frame_btns = Frame(dlg)
-        frame_btns.pack()
+        def confirmar_reset():
+            password = entry_pass.get().encode('utf-8')
 
-        def _confirmar():
-            pwd = entry_pass.get()
-            if not pwd:
-                messagebox.showerror("Error", "Ingresa la contrasena.", parent=dlg)
-                return
-
-            # Verificar contra BD (mismo hash bcrypt del login)
             try:
-                from config.settings import DB_PATH
-                conn = _sq3.connect(str(DB_PATH))
-                conn.row_factory = _sq3.Row
-                usuario = AuthManager.usuario_actual()
-                row = conn.execute(
-                    "SELECT password_hash FROM usuarios WHERE username=? AND rol='admin'",
-                    (usuario.get("username", "admin"),)
-                ).fetchone()
-                conn.close()
-
-                if not row:
-                    messagebox.showerror("Error", "Usuario admin no encontrado.", parent=dlg)
+                if not bcrypt.checkpw(password, PASSWORD_HASH.encode('utf-8')):
+                    messagebox.showerror("Acceso denegado", "Contraseña incorrecta")
+                    ventana_pass.destroy()
                     return
-
-                if not bcrypt.checkpw(pwd.encode(), row["password_hash"].encode()):
-                    messagebox.showerror("Acceso denegado", "Contrasena incorrecta.", parent=dlg)
-                    entry_pass.delete(0, END)
-                    entry_pass.focus()
-                    return
-
             except Exception as e:
-                logging.error(f"Error verificando contrasena reset stock: {e}")
-                messagebox.showerror("Error", f"No se pudo verificar:\n{e}", parent=dlg)
+                logging.error(f"Error al verificar contraseña: {e}")
+                messagebox.showerror("Error", "Error al verificar contraseña")
+                ventana_pass.destroy()
                 return
 
-            dlg.destroy()
+            confirmacion = messagebox.askyesno(
+                "Confirmar reseteo",
+                "⚠️ ¿Está seguro de resetear TODO el stock a 0?\n\n"
+                "Esta acción NO se puede deshacer.\n\n"
+                "Se recomienda hacer un respaldo antes de continuar."
+            )
 
-            # Confirmacion final
-            if not messagebox.askyesno(
-                "Ultima confirmacion",
-                "¿Esta SEGURO de resetear TODO el stock a 0?\n\n"
-                "Esta accion NO se puede deshacer.",
-                parent=self.window
-            ):
+            if not confirmacion:
+                ventana_pass.destroy()
                 return
 
             if DatabaseManager.resetear_stock():
                 self._cargar_productos()
-                logging.warning(
-                    f"RESET_STOCK | Usuario: {AuthManager.usuario_actual().get('username')} | "
-                    "Todo el stock reseteado a 0."
-                )
                 messagebox.showinfo(
-                    "Exito",
-                    "Todo el stock ha sido reseteado a 0 correctamente.",
-                    parent=self.window
+                    "Éxito",
+                    "Todo el stock ha sido reseteado a 0 correctamente."
                 )
             else:
-                messagebox.showerror("Error", "No se pudo resetear el stock.", parent=self.window)
+                messagebox.showerror("Error", "No se pudo resetear el stock")
+
+            ventana_pass.destroy()
 
         Button(
-            frame_btns,
-            text="Confirmar Reset",
+            ventana_pass,
+            text="Confirmar",
             font=FONT_STYLE,
-            bg="#b71c1c", fg="white",
-            command=_confirmar,
-            width=16
-        ).pack(side="left", padx=8)
+            bg="#4CAF50",
+            fg="white",
+            command=confirmar_reset
+        ).pack(pady=10)
 
-        Button(
-            frame_btns,
-            text="Cancelar",
-            font=FONT_STYLE,
-            bg="#546e7a", fg="white",
-            command=dlg.destroy,
-            width=10
-        ).pack(side="left", padx=8)
-
-        entry_pass.bind("<Return>", lambda e: _confirmar())
-        entry_pass.bind("<Escape>", lambda e: dlg.destroy())
-
+        entry_pass.bind("<Return>", lambda e: confirmar_reset())
 
     def _mostrar_menu_contextual(self, event):
         """Muestra menú contextual en clic derecho"""
