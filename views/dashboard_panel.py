@@ -108,7 +108,7 @@ class DashboardPanel(ctk.CTkFrame):
         # Encabezado
         hdr = ctk.CTkFrame(self, fg_color=Colors.PRIMARY, corner_radius=0)
         hdr.pack(fill="x")
-        ctk.CTkLabel(hdr, text="📊  Dashboard Operativo",
+        ctk.CTkLabel(hdr, text="📊  Panel de control operativo",
                      font=(Fonts.FAMILY,19,"bold"), text_color="white"
         ).pack(side="left", padx=20, pady=12)
         self.lbl_hora = ctk.CTkLabel(hdr, text="",

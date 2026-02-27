@@ -273,41 +273,65 @@ class VentaWindow:
     # ──────────────────────────────────────────────────────────────────────────
 
     def _editar_cantidad(self, item_id):
-        """Editor inline para la celda Cantidad (productos no-CJ)."""
+        """
+        Muestra un Entry flotante sobre la celda de cantidad para editarla.
+        ✅ FRACCIÓN: acepta decimales como 0.2, 1.5, 0.333
+        """
         bbox = self.tree.bbox(item_id, "#3")
         if not bbox:
             return
         x, y, w, h = bbox
+
         valores = list(self.tree.item(item_id, "values"))
+        cantidad_actual = str(valores[2])
+        codigo = valores[0]
 
         editor = Entry(self.tree, font=FONT_STYLE, justify="center")
         editor.place(x=x, y=y, width=w, height=h)
-        editor.insert(0, str(valores[2]))
+        editor.insert(0, cantidad_actual)
         editor.select_range(0, END)
         editor.focus_set()
 
         def confirmar(event=None):
+            texto_val = editor.get().strip().replace(",", ".")
             try:
-                nueva_cant = float(editor.get().strip())
+                nueva_cant = float(texto_val)
                 if nueva_cant <= 0:
                     raise ValueError
             except ValueError:
-                messagebox.showerror("Error", "Cantidad inválida.")
-                editor.destroy()
+                messagebox.showerror(
+                    "Error",
+                    "Cantidad inválida.\nEjemplos válidos: 1, 2, 0.5, 0.2, 1.333"
+                )
+                editor.focus_set()
                 return
-            precio = float(valores[3])
-            valores[2] = int(nueva_cant) if nueva_cant == int(nueva_cant) else round(nueva_cant, 6)
-            valores[4] = round(precio * nueva_cant, 2)
-            self.tree.item(item_id, values=tuple(valores))
+
+            # Verificar stock disponible
+            producto = DatabaseManager.buscar_producto_por_codigo(codigo)
+            if producto:
+                stock = float(producto["cantidad"])
+                if nueva_cant > stock:
+                    messagebox.showerror(
+                        "Stock Insuficiente",
+                        f"Stock disponible: {stock}\nCantidad solicitada: {nueva_cant}"
+                    )
+                    editor.focus_set()
+                    return
+
+            # Actualizar cantidad y recalcular subtotal
+            precio_unitario = float(valores[3])
+            nuevo_subtotal = precio_unitario * nueva_cant
+            cant_display = int(nueva_cant) if nueva_cant == int(nueva_cant) else round(nueva_cant, 6)
+            valores[2] = cant_display
+            valores[4] = nuevo_subtotal
+            self.tree.item(item_id, values=valores)
             self._actualizar_total()
             editor.destroy()
 
-        def cancelar(event=None):
-            editor.destroy()
-
         editor.bind("<Return>", confirmar)
-        editor.bind("<Escape>", cancelar)
-        editor.bind("<FocusOut>", cancelar)
+        editor.bind("<Escape>", lambda e: editor.destroy())
+        editor.bind("<FocusOut>", lambda e: editor.destroy())
+
 
     def _mostrar_dialogo_fraccion(self, item_id, valores_actuales, producto_bd):
         """
@@ -474,33 +498,38 @@ class VentaWindow:
     # ──────────────────────────────────────────────────────────────────────────
 
     def _imprimir_factura(self):
-        """
-        Genera la factura PDF tipo ticket 72 mm.
-        • Usa Arial Narrow desde resources/ si los TTF están disponibles.
-        • Fallback silencioso a Helvetica si no se encuentran.
-        • Sin warnings al usuario ni al log por fuentes faltantes.
-        """
+        """Genera la factura PDF tipo ticket 72 mm con FacturaGenerator."""
         items = self.tree.get_children()
         if not items:
             messagebox.showwarning("Advertencia", "No hay productos en la venta")
             return
 
+        # FacturaGenerator espera lista de listas:
+        # [codigo, descripcion, cantidad, precio_unitario, subtotal, impuesto]
         productos = []
         for item in items:
-            valores = self.tree.item(item, "values")
-            productos.append({
-                "codigo":          valores[0],
-                "descripcion":     valores[1],
-                "cantidad":        valores[2],
-                "precio_unitario": valores[3],
-                "subtotal":        valores[4],
-                "impuesto":        valores[5] if len(valores) > 5 else "",
-            })
-
-        total = sum(float(p["subtotal"]) for p in productos)
+            v = self.tree.item(item, "values")
+            productos.append([
+                v[0],
+                v[1],
+                v[2],
+                v[3],
+                v[4],
+                v[5] if len(v) > 5 else "",
+            ])
 
         try:
-            from controllers.pdf_generator import PDFGenerator
-            PDFGenerator.generar_factura_ticket(productos, total)
+            import os
+            from utils.pdf_generator import FacturaGenerator
+            ruta = "factura_flexible.pdf"
+            gen = FacturaGenerator(productos)
+            if gen.generar(ruta):
+                if os.name == "nt":
+                    os.startfile(ruta)
+                else:
+                    os.system(f"xdg-open '{ruta}'")
+            else:
+                messagebox.showerror("Error", "No se pudo generar el PDF.\nRevisa logs/farmatrack.log para detalles.")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar la factura:\n{e}")
+

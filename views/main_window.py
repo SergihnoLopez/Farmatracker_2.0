@@ -32,7 +32,7 @@ class MainWindow:
         self.usuario = usuario or {"username": "admin", "nombre": "Administrador", "rol": "admin"}
 
         self.root = ctk.CTk()
-        self.root.title("FarmaProStocker - Droguería Irlandesa")
+        self.root.title("FarmaTrack - Droguería Irlandesa")
         self.root.configure(fg_color=Colors.BACKGROUND)
 
         # ── Fix after() callbacks: aplicar en la instancia CTk, no en la clase ──
@@ -108,13 +108,13 @@ class MainWindow:
         # ── Logo ──────────────────────────────────────────────────────────────
         ctk.CTkLabel(
             self.sidebar, text="FarmaTrack",
-            font=(Fonts.FAMILY, 18, "bold"),
+            font=(Fonts.FAMILY, 36, "bold"),
             text_color=Colors.PRIMARY,
         ).pack(pady=(14, 2))
 
         ctk.CTkLabel(
             self.sidebar, text="Droguería Irlandesa",
-            font=(Fonts.FAMILY, 11),
+            font=(Fonts.FAMILY, 22),
             text_color=Colors.TEXT_SECONDARY,
         ).pack(pady=(0, 8))
 
@@ -181,7 +181,7 @@ class MainWindow:
         from views.tension_window          import TensionWindow
         from views.pedido_centro_window    import PedidoCentroWindow
         from views.reporte_ventas_window   import ReporteVentasWindow
-
+        from views.facturas_window         import FacturasWindow
         botones = [
             ("🏠  Dashboard",              self._mostrar_dashboard),
             ("💰  Registrar Venta",        lambda: self._abrir_modulo(VentaWindow)),
@@ -196,6 +196,7 @@ class MainWindow:
             ("🩺  Toma de Tensión",         lambda: self._abrir_modulo(TensionWindow)),
             ("🏬  Pedido Centro",           lambda: self._abrir_modulo(PedidoCentroWindow)),
             ("📊  Reporte de Ventas",       lambda: self._abrir_modulo(ReporteVentasWindow)),
+            ("📋  Pago de Facturas",        lambda: self._abrir_modulo(FacturasWindow)),
         ]
 
         for idx, (texto, comando) in enumerate(botones):

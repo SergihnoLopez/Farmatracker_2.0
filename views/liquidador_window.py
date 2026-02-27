@@ -156,33 +156,51 @@ class LiquidadorWindow:
         )
         self.lbl_precio_dividido.grid(row=0, column=3, padx=(10, 14), pady=10, sticky="w")
 
-        # Recalcular al cambiar el divisor
-        self.var_division.trace_add("write", self._on_division_change)
+        # Recalcular al presionar Enter o al salir del campo
+        self.entry_division.bind("<Return>", self._on_division_change)
+        self.entry_division.bind("<FocusOut>", self._on_division_change)
 
         # ── Frame resultados (tabla de precios) ───────────────────────────────
         frame_resultados = Frame(self.window)
         frame_resultados.grid(row=6, column=0, sticky="nsew", padx=50, pady=(0, 20))
+        frame_resultados.grid_columnconfigure(0, weight=1)
+        frame_resultados.grid_columnconfigure(1, weight=1)
         self.window.grid_rowconfigure(6, weight=1)
 
-        # Estilo grande para la tabla
-        estilo = ttk.Style()
-        estilo.configure("Big.Treeview",
-                         font=("Helvetica", 22, "bold"), rowheight=48)
-        estilo.configure("Big.Treeview.Heading",
-                         font=("Helvetica", 24, "bold"))
+        _FONT_TABLA      = ("Helvetica", 42, "bold")
+        _FONT_ENCABEZADO = ("Helvetica", 28, "bold")
+        _BG_HDR  = "#003B8E"
+        _BG_ALT  = "#f0f6ff"
+        _BG_NORM = "#ffffff"
 
-        self.tree = ttk.Treeview(
-            frame_resultados,
-            columns=("margen", "precio"),
-            show="headings",
-            height=8,
-            style="Big.Treeview",
-        )
-        self.tree.heading("margen", text="Margen (%)")
-        self.tree.heading("precio", text="Precio sugerido")
-        self.tree.column("margen", width=200, anchor="center")
-        self.tree.column("precio", width=300, anchor="e")
-        self.tree.pack(expand=True)
+        # Encabezados
+        Label(frame_resultados, text="Margen (%)",
+              font=_FONT_ENCABEZADO, bg=_BG_HDR, fg="white",
+              anchor="center", pady=10
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 1))
+        Label(frame_resultados, text="Precio sugerido",
+              font=_FONT_ENCABEZADO, bg=_BG_HDR, fg="white",
+              anchor="center", pady=10
+        ).grid(row=0, column=1, sticky="ew")
+
+        # Filas de resultados — referencias para actualizar en _mostrar_precios
+        self._filas_margen = []
+        self._filas_precio = []
+        for i, m in enumerate([10, 15, 20, 30, 40, 50]):
+            bg = _BG_ALT if i % 2 == 0 else _BG_NORM
+            lbl_m = Label(frame_resultados, text=f"{m}%",
+                          font=_FONT_TABLA, bg=bg, fg="#003B8E",
+                          anchor="center", pady=8)
+            lbl_m.grid(row=i + 1, column=0, sticky="ew", padx=(0, 1), pady=1)
+            lbl_p = Label(frame_resultados, text="—",
+                          font=_FONT_TABLA, bg=bg, fg="#1a1a1a",
+                          anchor="e", padx=30, pady=8)
+            lbl_p.grid(row=i + 1, column=1, sticky="ew", pady=1)
+            self._filas_margen.append(lbl_m)
+            self._filas_precio.append(lbl_p)
+
+        self.tree = None  # reemplazado por Labels directos
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # BÚSQUEDA Y SUGERENCIAS
@@ -328,12 +346,12 @@ class LiquidadorWindow:
     # DIVISIÓN
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _on_division_change(self, *args):
+    def _on_division_change(self, event=None):
         """Se ejecuta cada vez que cambia el valor del Entry de división."""
         if self._precio_compra_base <= 0:
             return
 
-        texto = self.var_division.get().strip()
+        texto = self.entry_division.get().strip()
 
         # Validar que sea número entero positivo
         try:
@@ -348,11 +366,22 @@ class LiquidadorWindow:
 
         if divisor == 1:
             self.lbl_precio_dividido.config(text="", fg="#616161")
+            # ✅ Restaurar lbl_detalle al precio base original
+            self.lbl_detalle.config(
+                text=f"Código: {self.entry_busqueda.get().strip()}   |   "
+                     f"Precio de compra: {format_precio_display(self._precio_compra_base)}"
+            )
         else:
             self.lbl_precio_dividido.config(
                 text=f"→  Precio unitario: {format_precio_display(precio_dividido)}  "
                      f"({format_precio_display(self._precio_compra_base)} ÷ {divisor})",
                 fg="#0f6cbd",
+            )
+            # ✅ Actualizar lbl_detalle con el precio dividido
+            self.lbl_detalle.config(
+                text=f"Código: {self.entry_busqueda.get().strip()}   |   "
+                     f"Precio de compra: {format_precio_display(self._precio_compra_base)}   |   "
+                     f"Precio unitario (÷{divisor}): {format_precio_display(precio_dividido)}"
             )
 
         self._mostrar_precios(precio_dividido)
@@ -363,13 +392,7 @@ class LiquidadorWindow:
 
     def _mostrar_precios(self, precio_compra: float):
         """Calcula y muestra precios sugeridos con diferentes márgenes."""
-        self.tree.delete(*self.tree.get_children())
-
         margenes = [10, 15, 20, 30, 40, 50]
-
-        for m in margenes:
+        for i, m in enumerate(margenes):
             precio_sugerido = precio_compra / (1 - m / 100)
-            self.tree.insert("", "end", values=(
-                f"{m}%",
-                format_precio_display(precio_sugerido),
-            ))
+            self._filas_precio[i].config(text=format_precio_display(precio_sugerido))

@@ -466,10 +466,17 @@ class InventarioWindow:
                 nuevo_valor = str(precio_validado)
 
             elif nombre_col == 'cantidad':
+                # ✅ FRACCIÓN: acepta decimales (0.2, 1.5, 0.333...)
                 try:
-                    nuevo_valor = str(int(nuevo_valor))
+                    val_float = float(str(nuevo_valor).replace(',', '.'))
+                    if val_float < 0:
+                        raise ValueError
+                    nuevo_valor = str(int(val_float)) if val_float == int(val_float) else str(round(val_float, 6))
                 except ValueError:
-                    messagebox.showerror("Error", "Cantidad inválida")
+                    messagebox.showerror(
+                        "Error",
+                        "Cantidad inválida.\nUse números como: 1, 0.5, 0.2, 1.333"
+                    )
                     editor.focus_set()
                     return
 

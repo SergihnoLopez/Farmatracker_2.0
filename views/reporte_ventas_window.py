@@ -340,27 +340,24 @@ class ReporteVentasWindow:
             padx=12, pady=6, command=self._refrescar
         ).pack(side="left", padx=6)
 
-        # Botón reiniciar ventas — solo visible si el usuario es admin
-        self.btn_reiniciar = tk.Button(
+        # Botón reiniciar ventas de HOY — solo admin
+        self.btn_reiniciar_hoy = tk.Button(
             botones, text="🗑️  Reiniciar Ventas de Hoy",
             font=self._FONT_B, bg="#b71c1c", fg="white",
             activebackground="#7f0000", relief="flat",
             padx=12, pady=6, command=self._reiniciar_ventas_hoy
         )
-        # Solo mostrar si el usuario activo es admin
+        # Botón reiniciar TODAS las ventas — solo admin
+        self.btn_reiniciar_todas = tk.Button(
+            botones, text="⚠️  Reiniciar TODAS las Ventas",
+            font=self._FONT_B, bg="#4a0000", fg="white",
+            activebackground="#2d0000", relief="flat",
+            padx=12, pady=6, command=self._reiniciar_todas_las_ventas
+        )
         if AuthManager and AuthManager.es_admin():
-            self.btn_reiniciar.pack(side="left", padx=6)
+            self.btn_reiniciar_hoy.pack(side="left", padx=6)
+            self.btn_reiniciar_todas.pack(side="left", padx=6)
 
-        # Botón reiniciar ventas — solo visible si el usuario es admin
-        self.btn_reiniciar = tk.Button(
-            botones, text="🗑️  Reiniciar Ventas de Hoy",
-            font=self._FONT_B, bg="#b71c1c", fg="white",
-            activebackground="#7f0000", relief="flat",
-            padx=12, pady=6, command=self._reiniciar_ventas_hoy
-        )
-        # Solo mostrar si el usuario activo es admin
-        if AuthManager and AuthManager.es_admin():
-            self.btn_reiniciar.pack(side="left", padx=6)
 
     def _stat(self, parent, titulo, valor, color):
         """Crea un widget de estadística con título y valor grande."""
@@ -727,6 +724,165 @@ class ReporteVentasWindow:
     # ─────────────────────────────────────────────────────────────────────────
     # EXPORTAR PDF
     # ─────────────────────────────────────────────────────────────────────────
+
+    def _reiniciar_todas_las_ventas(self):
+        """
+        Elimina TODOS los registros de la tabla ventas.
+        ⚠️ OPERACIÓN IRREVERSIBLE — Solo admin + contraseña bcrypt.
+        Guarda un backup del log antes de borrar.
+        """
+        import sqlite3 as _sq3
+        import bcrypt as _bcrypt
+        from datetime import datetime as _dt
+
+        # Verificar rol
+        if not AuthManager or not AuthManager.es_admin():
+            messagebox.showerror(
+                "Acceso denegado",
+                "Solo el administrador puede reiniciar todas las ventas.",
+                parent=self.window
+            )
+            return
+
+        # Diálogo de confirmación
+        dlg = tk.Toplevel(self.window)
+        dlg.title("⚠️ Reiniciar TODAS las Ventas")
+        dlg.geometry("460x320")
+        dlg.resizable(False, False)
+        dlg.transient(self.window)
+        dlg.grab_set()
+        dlg.configure(bg=Colors.SURFACE)
+
+        # Barra roja oscura superior
+        tk.Frame(dlg, bg="#4a0000", height=8).pack(fill="x")
+
+        tk.Label(
+            dlg,
+            text="⚠️  Reiniciar TODAS las Ventas",
+            font=("Segoe UI", 15, "bold"),
+            bg=Colors.SURFACE, fg="#4a0000"
+        ).pack(pady=(14, 4))
+
+        tk.Label(
+            dlg,
+            text="Se eliminarán PERMANENTEMENTE todos los registros\n"
+                 "de ventas del historial completo.\n\n"
+                 "Esta acción NO se puede deshacer.\n"
+                 "Se guardará un respaldo en el log del sistema.",
+            font=("Segoe UI", 10),
+            bg=Colors.SURFACE, fg="#555555",
+            justify="center"
+        ).pack(pady=(0, 10))
+
+        tk.Label(
+            dlg,
+            text="Contraseña de administrador:",
+            font=("Segoe UI", 11, "bold"),
+            bg=Colors.SURFACE
+        ).pack()
+
+        entry_pass = tk.Entry(dlg, show="*", font=("Segoe UI", 13),
+                              width=22, justify="center")
+        entry_pass.pack(pady=(4, 14))
+        entry_pass.focus_set()
+
+        frame_btns = tk.Frame(dlg, bg=Colors.SURFACE)
+        frame_btns.pack()
+
+        def _ejecutar():
+            pwd = entry_pass.get()
+            if not pwd:
+                messagebox.showerror("Error", "Ingresa la contraseña.", parent=dlg)
+                return
+
+            # Verificar contraseña bcrypt
+            try:
+                from config.settings import DB_PATH
+                conn = _sq3.connect(str(DB_PATH))
+                conn.row_factory = _sq3.Row
+                usuario = AuthManager.usuario_actual()
+                row = conn.execute(
+                    "SELECT password_hash FROM usuarios WHERE username=? AND rol='admin'",
+                    (usuario.get("username", "admin"),)
+                ).fetchone()
+                conn.close()
+                if not row:
+                    messagebox.showerror("Error", "Usuario admin no encontrado.", parent=dlg)
+                    return
+                if not _bcrypt.checkpw(pwd.encode(), row["password_hash"].encode()):
+                    messagebox.showerror("Acceso denegado", "Contraseña incorrecta.", parent=dlg)
+                    return
+            except Exception as ex:
+                messagebox.showerror("Error", f"Error al verificar contraseña:\n{ex}", parent=dlg)
+                return
+
+            # Segunda confirmación explícita
+            confirmacion = messagebox.askyesno(
+                "Confirmación final",
+                "¿Está COMPLETAMENTE seguro?\n\n"
+                "Se eliminarán TODOS los registros de ventas\n"
+                "de toda la historia del sistema.\n\n"
+                "Esta acción es IRREVERSIBLE.",
+                icon="warning",
+                parent=dlg
+            )
+            if not confirmacion:
+                dlg.destroy()
+                return
+
+            try:
+                from config.settings import DB_PATH
+                import logging
+                conn = _sq3.connect(str(DB_PATH))
+                # Registrar en log antes de borrar
+                n = conn.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
+                total = conn.execute("SELECT COALESCE(SUM(total),0) FROM ventas").fetchone()[0]
+                logging.warning(
+                    f"REINICIO TOTAL DE VENTAS — {n} registros eliminados — "
+                    f"Total acumulado: ${total:,.0f} — "
+                    f"Operador: {AuthManager.usuario_actual().get('username','?')} — "
+                    f"Fecha: {_dt.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                conn.execute("DELETE FROM ventas")
+                conn.commit()
+                conn.close()
+                logging.info(f"Historial de ventas reiniciado — {n} registros eliminados.")
+                messagebox.showinfo(
+                    "Completado",
+                    f"Se eliminaron {n} registro(s) de ventas.\n"
+                    "El respaldo quedó guardado en logs/farmatrack.log.",
+                    parent=self.window
+                )
+                dlg.destroy()
+                self._refrescar()
+            except Exception as ex:
+                logging.error(f"Error reiniciando todas las ventas: {ex}", exc_info=True)
+                messagebox.showerror("Error", f"No se pudieron eliminar las ventas:\n{ex}",
+                                     parent=self.window)
+
+        tk.Button(
+            frame_btns,
+            text="Confirmar y Eliminar TODO",
+            font=("Segoe UI", 11, "bold"),
+            bg="#4a0000", fg="white",
+            activebackground="#2d0000",
+            relief="flat", padx=14, pady=6,
+            command=_ejecutar
+        ).pack(side="left", padx=8)
+
+        tk.Button(
+            frame_btns,
+            text="Cancelar",
+            font=("Segoe UI", 11),
+            bg="#546e7a", fg="white",
+            activebackground="#37474f",
+            relief="flat", padx=14, pady=6,
+            command=dlg.destroy
+        ).pack(side="left", padx=8)
+
+        entry_pass.bind("<Return>", lambda e: _ejecutar())
+        entry_pass.bind("<Escape>", lambda e: dlg.destroy())
+
 
     def _exportar_pdf(self):
         if not REPORTLAB_OK:

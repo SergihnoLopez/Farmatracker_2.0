@@ -1,6 +1,7 @@
 """
 FarmaTrack - Sistema de gestión para Droguería Irlandesa
 VERSIÓN ESTABLE PARA INSTALADOR WINDOWS
+✅ NUEVO: Inicialización de tabla facturas_pago al arrancar
 """
 
 import sys
@@ -126,6 +127,7 @@ def _suprimir_phantom_tk():
     except Exception:
         pass  # si falla, continuar normalmente
 
+
 def main():
     _suprimir_phantom_tk()   # ← eliminar ventana fantasma
     verificar_dependencias()
@@ -137,6 +139,13 @@ def main():
     # 🔥 PASO 2 — Inicializar tablas (ahora sí)
     from models.database import DatabaseManager
     DatabaseManager.inicializar_tablas()
+
+    # ✅ PASO 2.1 — Inicializar tabla de facturas por pagar
+    try:
+        from controllers.facturas import FacturasController
+        FacturasController.inicializar_tabla()
+    except Exception as e:
+        logging.warning(f"No se pudo inicializar tabla facturas_pago: {e}")
 
     verificar_estructura()
 

@@ -1,6 +1,9 @@
 """
-Generador de facturas en PDF
+Generador de facturas en PDF - FarmaTrack
+Basado en la implementación probada de interfaz_inicio.py
 """
+import os
+import logging
 from datetime import datetime
 from fpdf import FPDF, XPos, YPos
 from config.settings import (
@@ -8,19 +11,23 @@ from config.settings import (
     COMPANY_PHONE, COMPANY_BRANCH
 )
 from utils.formatters import format_precio_miles
-import logging
+
+
+# Directorio raíz del proyecto (donde están los .ttf)
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_RESOURCES_DIR = os.path.join(_BASE_DIR, "resources")
 
 
 class FacturaGenerator:
-    """Genera facturas en formato PDF térmico"""
+    """Genera facturas en formato PDF térmico (ticket 72 mm)"""
 
     def __init__(self, productos_venta: list):
-        self.productos = productos_venta
-        self.ancho_papel = 72  # mm
-        self.ancho_texto = 68  # mm
+        self.productos   = productos_venta
+        self.ancho_papel = 72
+        self.ancho_texto = 68
 
     def generar(self, output_path: str = "factura_flexible.pdf") -> bool:
-        """Genera el PDF de la factura"""
+        """Genera el PDF de la factura."""
         try:
             altura = 130 + len(self.productos) * 14
 
@@ -29,13 +36,19 @@ class FacturaGenerator:
             pdf.add_page()
             pdf.set_auto_page_break(auto=True, margin=2)
 
-            # Registrar fuentes
+            # === Registrar fuentes desde resources/ ===
+            # Cambiamos temporalmente el directorio de trabajo al de resources
+            # para que fpdf encuentre los .ttf igual que en interfaz_inicio.py
+            _cwd_original = os.getcwd()
             try:
-                pdf.add_font("ArialNarrow", "", "Arial Narrow Regular.ttf")
-                pdf.add_font("ArialNarrow", "B", "Arial Narrow Regular.ttf")
-                pdf.add_font("ArialNarrowBold", "", "Arial Narrow Bold.ttf")
-            except:
-                logging.warning("Fuentes personalizadas no encontradas, usando Arial estándar")
+                os.chdir(_RESOURCES_DIR)
+                pdf.add_font("ArialNarrow",     "", "Arial Narrow Regular.ttf")
+                pdf.add_font("ArialNarrow",     "B", "Arial Narrow Regular.ttf")
+                pdf.add_font("ArialNarrowBold", "", "Arial Narrow Regular.ttf")
+            except Exception as fe:
+                logging.warning(f"Fuente Arial Narrow no cargada: {fe}")
+            finally:
+                os.chdir(_cwd_original)
 
             self._generar_encabezado(pdf)
             total, total_iva = self._generar_productos(pdf)
@@ -49,119 +62,119 @@ class FacturaGenerator:
             logging.error(f"Error al generar factura: {e}")
             return False
 
+    def _upper(self, texto):
+        return str(texto).upper()
+
+    def _fmt(self, v):
+        try:
+            return f"${int(round(float(v))):,}".replace(",", ".")
+        except Exception:
+            return str(v)
+
     def _generar_encabezado(self, pdf: FPDF):
-        """Genera el encabezado de la factura"""
         separador = "=" * int(self.ancho_texto * 1.2)
 
         pdf.set_font("ArialNarrowBold", "", 16)
-        pdf.cell(self.ancho_texto, 7, COMPANY_NAME.upper(), align="C",
+        pdf.cell(self.ancho_texto, 7, self._upper(COMPANY_NAME), align="C",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         pdf.set_font("ArialNarrow", "", 14)
-        lineas = [
+        for linea in [
             f"NIT {COMPANY_NIT}",
             f"Sucursal: {COMPANY_BRANCH}",
             COMPANY_ADDRESS,
             f"Tel: {COMPANY_PHONE}",
-            separador
-        ]
-
-        for linea in lineas:
-            pdf.cell(self.ancho_texto, 5, linea.upper(), align="C",
+            separador,
+        ]:
+            pdf.cell(self.ancho_texto, 5, self._upper(linea), align="C",
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         pdf.cell(self.ancho_texto, 5,
-                 f"FECHA: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}".upper(),
+                 self._upper(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(self.ancho_texto, 5, "CAJERO: PRINCIPAL",
+        pdf.cell(self.ancho_texto, 5, self._upper("Cajero: Principal"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.cell(self.ancho_texto, 5, separador, align="C",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
-    def _generar_productos(self, pdf: FPDF) -> tuple:
-        """Genera la lista de productos y retorna (total, total_iva)"""
-        total = 0.0
+    def _generar_productos(self, pdf: FPDF):
+        separador = "=" * int(self.ancho_texto * 1.2)
+        total     = 0.0
         total_iva = 0.0
 
         pdf.set_font("ArialNarrow", "", 14)
-        pdf.cell(self.ancho_texto, 5, "PRODUCTO / CANT / PRECIO",
+        pdf.cell(self.ancho_texto, 5, self._upper("Producto / Cant / Precio"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.cell(self.ancho_texto, 4, "=" * int(self.ancho_texto * 1.2),
+        pdf.cell(self.ancho_texto, 4, separador,
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         for item in self.productos:
-            # Estructura: [codigo, descripcion, cantidad, precio_unitario, subtotal, impuesto]
-            codigo = str(item[0])
-            descripcion = str(item[1]).upper()
-            cantidad = float(item[2])
-            precio_unitario = float(item[3])
-            subtotal = float(item[4])
-            impuesto_str = str(item[5]).strip() if len(item) > 5 else ""
+            # Acepta tanto lista/tupla como dict
+            if isinstance(item, dict):
+                codigo          = str(item.get("codigo", ""))
+                descripcion     = self._upper(str(item.get("descripcion", "")))
+                cantidad        = float(item.get("cantidad", 0))
+                precio_unitario = float(item.get("precio_unitario", 0))
+                subtotal        = float(item.get("subtotal", 0))
+                impuesto_str    = str(item.get("impuesto", "")).strip()
+            else:
+                codigo          = str(item[0])
+                descripcion     = self._upper(str(item[1]))
+                cantidad        = float(item[2])
+                precio_unitario = float(item[3])
+                subtotal        = float(item[4])
+                impuesto_str    = str(item[5]).strip() if len(item) > 5 else ""
 
             total += subtotal
 
-            # Calcular IVA
             if impuesto_str == "19% IVA":
-                precio_base = precio_unitario / 1.19
+                precio_base  = precio_unitario / 1.19
                 iva_unitario = precio_unitario - precio_base
-                total_iva += iva_unitario * cantidad
+                total_iva   += iva_unitario * cantidad
 
-            # Código
             pdf.set_font("ArialNarrow", "B", 14)
             pdf.cell(self.ancho_texto, 5, f"CÓDIGO: {codigo}",
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
-            # Descripción y cantidad
             pdf.set_font("ArialNarrow", "", 14)
-            linea_producto = f"{descripcion[:30]} X{int(cantidad)}"
-            pdf.multi_cell(self.ancho_texto, 5, linea_producto.strip(), align="L")
+            linea_prod = f"{descripcion[:30]} X{int(cantidad)}"
+            pdf.multi_cell(self.ancho_texto, 5, linea_prod.strip(), align="L")
 
-            # Precio unitario
             pdf.cell(self.ancho_texto, 5,
-                     f"   -> {format_precio_miles(precio_unitario)} C/U",
+                     self._upper(f"   -> {self._fmt(precio_unitario)} C/U"),
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
-            # Subtotal
             pdf.cell(self.ancho_texto, 5,
-                     f"   SUBTOTAL: {format_precio_miles(subtotal)}",
+                     self._upper(f"   SUBTOTAL: {self._fmt(subtotal)}"),
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
-            # Espacio
-            pdf.cell(self.ancho_texto, 3, "", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(self.ancho_texto, 3, "",
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         return total, total_iva
 
     def _generar_totales(self, pdf: FPDF, total: float, total_iva: float):
-        """Genera la sección de totales"""
         separador = "=" * int(self.ancho_texto * 1.2)
 
         pdf.cell(self.ancho_texto, 5, separador, align="C",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
         pdf.set_font("ArialNarrow", "B", 14)
         pdf.cell(self.ancho_texto, 6,
-                 f"IVA TOTAL: {format_precio_miles(total_iva)}",
+                 self._upper(f"IVA TOTAL: {self._fmt(total_iva)}"),
                  align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
         pdf.set_font("ArialNarrowBold", "", 16)
         pdf.cell(self.ancho_texto, 7,
-                 f"TOTAL: {format_precio_miles(total)}",
+                 self._upper(f"TOTAL: {self._fmt(total)}"),
                  align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
         pdf.set_font("ArialNarrow", "", 14)
         pdf.cell(self.ancho_texto, 5, separador, align="C",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def _generar_pie(self, pdf: FPDF):
-        """Genera el pie de página"""
-        lineas = [
+        for linea in [
             "Gracias por su compra",
             "Vuelva pronto",
             COMPANY_NAME,
             "Comprometidos con tu",
-            "Bienestar y economía"
-        ]
-
-        for linea in lineas:
-            pdf.cell(self.ancho_texto, 5, linea.upper(), align="C",
+            "Bienestar y economía",
+        ]:
+            pdf.cell(self.ancho_texto, 5, self._upper(linea), align="C",
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
