@@ -289,6 +289,8 @@ class MainWindow:
             self.root.destroy()
         except Exception:
             pass
+        import sys as _sys
+        _sys.exit(0)   # ← mata threads de cv2, CTk y after() pendientes
 
     def run(self):
         self.root.mainloop()

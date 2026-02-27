@@ -1,6 +1,7 @@
 """
 Ventana de Login - FarmaTrack
-Fondo blanco, video MP4 debajo del label, layout dos paneles
+Rediseño completo: panel izquierdo en tk puro + video sobre tk.Canvas.
+tk.Canvas garantiza winfo_width/height correctos sin interferencia de CTk.
 """
 import customtkinter as ctk
 import tkinter as tk
@@ -51,10 +52,8 @@ class AuthManager:
         try:
             conn = sqlite3.connect(str(cls._get_db_path()))
             cur  = conn.cursor()
-
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='usuarios'")
             existe = cur.fetchone() is not None
-
             if existe:
                 cur.execute("PRAGMA table_info(usuarios)")
                 cols_act = {r[1] for r in cur.fetchall()}
@@ -79,7 +78,6 @@ class AuthManager:
                     conn.commit()
             else:
                 cls._crear_tabla(cur); conn.commit()
-
             cur.execute("SELECT COUNT(*) FROM usuarios")
             if cur.fetchone()[0] == 0:
                 for user,pw,nom,rol in [
@@ -184,24 +182,21 @@ class AuthManager:
 
 
 # ==============================================================================
-# HELPER DE VIDEO — reutilizable en login Y dashboard
+# VIDEO PLAYER — sobre tk.Canvas (única forma 100% confiable)
 # ==============================================================================
 
 class VideoPlayer:
     """
-    Reproduce un video MP4 en loop dentro de un tk.Label.
-    Uso:
-        player = VideoPlayer(label_widget, video_path)
-        player.start()
-        player.stop()   # llamar antes de destroy()
+    Reproduce MP4 en loop sobre un tk.Canvas.
+    Canvas.winfo_width/height siempre devuelven px reales sin interferencia de CTk.
     """
-    def __init__(self, label: tk.Label, path, bg_color="#ffffff"):
-        self.label     = label
+    def __init__(self, canvas: tk.Canvas, path):
+        self.canvas    = canvas
         self.path      = str(path)
-        self.bg_color  = bg_color
         self._cap      = None
         self._after_id = None
         self._running  = False
+        self._img_id   = None
 
     def start(self):
         if not CV2_OK or not PIL_OK:
@@ -209,70 +204,80 @@ class VideoPlayer:
         try:
             self._cap = cv2.VideoCapture(self.path)
             if not self._cap.isOpened():
-                logging.warning(f"No se pudo abrir video: {self.path}")
+                logging.warning(f"VideoPlayer: no se pudo abrir {self.path}")
                 return
+            logging.info(f"VideoPlayer: iniciando {self.path}")
             self._running = True
             self._tick()
         except Exception as e:
-            logging.warning(f"VideoPlayer.start error: {e}")
+            logging.warning(f"VideoPlayer.start: {e}")
 
     def stop(self):
         self._running = False
         if self._after_id:
-            try:
-                self.label.after_cancel(self._after_id)
-            except Exception:
-                pass
+            try: self.canvas.after_cancel(self._after_id)
+            except Exception: pass
             self._after_id = None
         if self._cap:
-            try:
-                self._cap.release()
-            except Exception:
-                pass
+            try: self._cap.release()
+            except Exception: pass
             self._cap = None
 
     def _tick(self):
         if not self._running or not self._cap:
             return
-        # Verificar que el widget todavía existe
         try:
-            if not self.label.winfo_exists():
+            if not self.canvas.winfo_exists():
                 self.stop(); return
         except Exception:
             self.stop(); return
 
         ret, frame = self._cap.read()
-        if not ret:                         # fin del video → loop
+        if not ret:
             self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = self._cap.read()
             if not ret:
                 self.stop(); return
 
         try:
-            w = max(self.label.winfo_width(),  10)
-            h = max(self.label.winfo_height(), 10)
+            w = self.canvas.winfo_width()
+            h = self.canvas.winfo_height()
+            # Canvas siempre reporta px reales; si es muy pequeño forzar mínimo
+            if w < 20: w = 400
+            if h < 20: h = 260
+
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-            img.thumbnail((w, h), Image.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            self.label.configure(image=photo, bg=self.bg_color)
-            self.label.image = photo        # evitar GC
-        except Exception:
-            pass
+            img   = Image.fromarray(frame_rgb).resize((w, h), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(image=img, master=self.canvas)
+
+            if self._img_id is None:
+                self._img_id = self.canvas.create_image(0, 0, anchor="nw", image=photo)
+            else:
+                self.canvas.itemconfig(self._img_id, image=photo)
+            self.canvas.image = photo       # mantener referencia — evitar GC
+
+        except Exception as e:
+            logging.debug(f"VideoPlayer._tick: {e}")
 
         fps   = self._cap.get(cv2.CAP_PROP_FPS) or 30
-        delay = max(20, int(1000 / fps))
-        self._after_id = self.label.after(delay, self._tick)
+        delay = max(16, int(1000 / fps))
+        self._after_id = self.canvas.after(delay, self._tick)
 
 
 def _get_video_path():
-    """Devuelve la ruta del MP4 si existe, o None."""
+    candidatos = []
     try:
-        from config.settings import RESOURCES_DIR
-        p = RESOURCES_DIR / "escudo_vector_farmacia_tecnologia.mp4"
+        from config.settings import RESOURCES_DIR, BASE_DIR
+        candidatos.append(RESOURCES_DIR / "escudo_vector_farmacia_tecnologia.mp4")
+        candidatos.append(BASE_DIR / "resources" / "escudo_vector_farmacia_tecnologia.mp4")
     except ImportError:
-        p = Path("resources") / "escudo_vector_farmacia_tecnologia.mp4"
-    return p if p.exists() else None
+        pass
+    candidatos.append(Path("resources") / "escudo_vector_farmacia_tecnologia.mp4")
+    candidatos.append(Path(__file__).parent.parent / "resources" / "escudo_vector_farmacia_tecnologia.mp4")
+    for p in candidatos:
+        if p.exists():
+            return p
+    return None
 
 
 # ==============================================================================
@@ -281,95 +286,108 @@ def _get_video_path():
 
 class LoginWindow:
     """
-    Pantalla de inicio de sesión.
-    Layout: panel izquierdo blanco con branding + video | panel derecho formulario.
+    Panel izquierdo: 100% tk widgets (tk.Frame, tk.Label, tk.Canvas)
+    Panel derecho:   CTk widgets para el formulario
+
+    La separación es crítica: el VideoPlayer necesita que su canvas sea
+    hijo de un árbol tk puro para que winfo_width/height sean confiables.
     """
 
     def __init__(self, on_login_success):
-        self.on_login_success    = on_login_success
+        self.on_login_success     = on_login_success
         self._usuario_autenticado = None
         self._video_player        = None
 
         AuthManager.inicializar_tabla_usuarios()
 
+
         self.root = ctk.CTk()
         self.root.title("FarmaTrack – Iniciar Sesión")
         self.root.resizable(False, False)
-        self.root.configure(fg_color="#ffffff")   # fondo blanco
+        self.root.configure(fg_color="#ffffff")
 
         self._setup_ui()
-        self._iniciar_video()
 
+        # Calcular y centrar ventana
         self.root.update_idletasks()
-        w = max(self.root.winfo_reqwidth(), 860)
-        h = max(self.root.winfo_reqheight(), 540)
+        w = max(self.root.winfo_reqwidth(), 880)
+        h = max(self.root.winfo_reqheight(), 560)
         x = (self.root.winfo_screenwidth()  // 2) - (w // 2)
         y = (self.root.winfo_screenheight() // 2) - (h // 2)
         self.root.geometry(f"{w}x{h}+{x}+{y}")
 
-    # ── UI ────────────────────────────────────────────────────────────────────
+        # Iniciar video tras primer render completo
+        self.root.after(200, self._iniciar_video)
 
     def _setup_ui(self):
-        # ── Panel izquierdo: BLANCO con branding + video ──────────────────────
-        self.panel_left = ctk.CTkFrame(
-            self.root, fg_color="#ffffff",
-            corner_radius=0, width=400,
-        )
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PANEL IZQUIERDO — solo tk.* para geometría confiable
+        # ══════════════════════════════════════════════════════════════════════
+        self.panel_left = tk.Frame(self.root, bg="#ffffff", width=420)
         self.panel_left.pack(side="left", fill="both")
         self.panel_left.pack_propagate(False)
 
-        # Barra azul superior en el panel izquierdo
-        barra = ctk.CTkFrame(self.panel_left, fg_color=Colors.PRIMARY,
-                             corner_radius=0, height=6)
-        barra.pack(fill="x")
+        # Acento azul top
+        tk.Frame(self.panel_left, bg=Colors.PRIMARY, height=5).pack(fill="x")
 
-        ctk.CTkFrame(self.panel_left, fg_color="transparent", height=30).pack()
+        # Espacio
+        tk.Frame(self.panel_left, bg="#ffffff", height=20).pack()
 
-        ctk.CTkLabel(
+        # Emoji farmacia
+        tk.Label(
             self.panel_left, text="💊",
-            font=("Segoe UI", 52),
+            font=("Segoe UI", 46), bg="#ffffff",
         ).pack()
 
-        ctk.CTkLabel(
+        # Nombre app
+        tk.Label(
             self.panel_left, text="FarmaTrack",
-            font=(Fonts.FAMILY, 28, "bold"),
-            text_color=Colors.PRIMARY,
-        ).pack(pady=(6, 2))
+            font=(Fonts.FAMILY, 26, "bold"),
+            fg=Colors.PRIMARY, bg="#ffffff",
+        ).pack(pady=(4, 1))
 
-        ctk.CTkLabel(
+        # Subtítulo
+        tk.Label(
             self.panel_left, text="Droguería Irlandesa",
-            font=(Fonts.FAMILY, 13),
-            text_color=Colors.TEXT_SECONDARY,
-        ).pack(pady=(0, 16))
+            font=(Fonts.FAMILY, 12),
+            fg=Colors.TEXT_SECONDARY, bg="#ffffff",
+        ).pack(pady=(0, 10))
 
-        # ── Contenedor del video (debajo del label) ───────────────────────────
-        self.video_frame = ctk.CTkFrame(
-            self.panel_left, fg_color="#ffffff",
-            corner_radius=10,
-            border_width=1, border_color=Colors.BORDER,
+        # ── Canvas de video ───────────────────────────────────────────────────
+        # Borde externo con tk.Frame (1px borde gris)
+        border_frame = tk.Frame(self.panel_left, bg=Colors.BORDER)
+        border_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        self.video_canvas = tk.Canvas(
+            border_frame,
+            bg="#1c2340",
+            highlightthickness=0,
+            cursor="none",
         )
-        self.video_frame.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+        self.video_canvas.pack(fill="both", expand=True, padx=1, pady=1)
 
-        # tk.Label nativo para mostrar los frames
-        self.video_label = tk.Label(
-            self.video_frame, bg="#ffffff", bd=0, cursor="none",
+        # Texto placeholder mientras carga
+        self._text_id = self.video_canvas.create_text(
+            210, 120, text="● cargando...",
+            fill="#4a5580", font=(Fonts.FAMILY, 10),
         )
-        self.video_label.pack(fill="both", expand=True, padx=4, pady=4)
 
-        ctk.CTkLabel(
-            self.panel_left,
-            text="v2.0  •  Sistema POS",
-            font=(Fonts.FAMILY, 10),
-            text_color="#aaaaaa",
-        ).pack(pady=(0, 14))
+        # Versión
+        tk.Label(
+            self.panel_left, text="v2.0  •  Sistema POS",
+            font=(Fonts.FAMILY, 9),
+            fg="#bbbbbb", bg="#ffffff",
+        ).pack(pady=(0, 10))
 
-        # ── Divisor vertical ──────────────────────────────────────────────────
-        ctk.CTkFrame(
-            self.root, fg_color=Colors.BORDER,
-            corner_radius=0, width=1,
-        ).pack(side="left", fill="y")
+        # ══════════════════════════════════════════════════════════════════════
+        # DIVISOR 1px
+        # ══════════════════════════════════════════════════════════════════════
+        tk.Frame(self.root, bg=Colors.BORDER, width=1).pack(side="left", fill="y")
 
-        # ── Panel derecho: formulario ─────────────────────────────────────────
+        # ══════════════════════════════════════════════════════════════════════
+        # PANEL DERECHO — CTk para el formulario
+        # ══════════════════════════════════════════════════════════════════════
         panel_right = ctk.CTkFrame(
             self.root, fg_color="#f4f6f8",
             corner_radius=0, width=460,
@@ -382,7 +400,7 @@ class LoginWindow:
             corner_radius=16,
             border_width=1, border_color=Colors.BORDER,
         )
-        card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.84, relheight=0.74)
+        card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.84, relheight=0.76)
 
         ctk.CTkLabel(
             card, text="Iniciar Sesión",
@@ -434,7 +452,7 @@ class LoginWindow:
         self.lbl_error.pack()
 
         ctk.CTkLabel(
-            card, text="Por defecto: admin / admin123",
+            card, text="",
             font=(Fonts.FAMILY, 11), text_color="#bbbbbb",
         ).pack(pady=(12, 0))
 
@@ -445,13 +463,27 @@ class LoginWindow:
     def _iniciar_video(self):
         path = _get_video_path()
         if not path:
-            # Sin video: mostrar placeholder de color
-            self.video_label.configure(bg=Colors.BACKGROUND,
-                                       text="🎬", font=("Segoe UI", 32))
+            # Sin archivo: mostrar placeholder bonito
+            self.video_canvas.delete(self._text_id)
+            self.video_canvas.configure(bg="#1c2340")
+            cx = self.video_canvas.winfo_width()  // 2 or 210
+            cy = self.video_canvas.winfo_height() // 2 or 120
+            self.video_canvas.create_text(
+                cx, cy - 20, text="💊",
+                font=("Segoe UI", 40), fill="#4a6fa5",
+            )
+            self.video_canvas.create_text(
+                cx, cy + 30, text="FarmaTrack",
+                font=(Fonts.FAMILY, 16, "bold"), fill="#6a8fc5",
+            )
             return
-        self._video_player = VideoPlayer(self.video_label, path, bg_color="#ffffff")
-        # Esperar a que el frame esté dibujado antes de arrancar
-        self.root.after(200, self._video_player.start)
+
+        # Quitar placeholder
+        self.video_canvas.delete(self._text_id)
+        self._text_id = None
+
+        self._video_player = VideoPlayer(self.video_canvas, path)
+        self._video_player.start()
 
     # ── Login ─────────────────────────────────────────────────────────────────
 
@@ -470,12 +502,9 @@ class LoginWindow:
 
         if usuario:
             self._usuario_autenticado = usuario
-            # 1) Detener video (cancela su after())
             if self._video_player:
                 self._video_player.stop()
-            # 2) Ocultar ventana
             self.root.withdraw()
-            # 3) Dar 100 ms para que CTk limpie sus propios after()
             self.root.after(100, self._finalizar_login)
         else:
             self.lbl_error.configure(text="✗  Usuario o contraseña incorrectos")
@@ -492,7 +521,19 @@ class LoginWindow:
             pass
         self.on_login_success(usuario)
 
+    def _cerrar_login(self):
+        if self._video_player:
+            self._video_player.stop()
+        try:
+            self.root.quit()
+            self.root.destroy()
+        except Exception:
+            pass
+        import sys as _sys
+        _sys.exit(0)
+
     def run(self):
+        self.root.protocol("WM_DELETE_WINDOW", self._cerrar_login)
         self.root.mainloop()
 
 

@@ -21,14 +21,19 @@ DB_FILE = "farma_pro_stocker.db"
 APPDATA_DIR = Path(os.getenv("APPDATA")) / APP_NAME
 APPDATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# 📌 Base de datos SIEMPRE en AppData
-DB_PATH = APPDATA_DIR / DB_FILE
-
 # 📌 Recursos siguen en carpeta del programa
 BASE_DIR = Path(__file__).resolve().parent.parent
 RESOURCES_DIR = BASE_DIR / "resources"
 
-# 📌 Logs ahora también en AppData (más seguro)
+# 📌 Base de datos:
+#    - Desarrollo (PyCharm/script): usa la DB de la raíz del proyecto directamente
+#    - Producción (.exe instalado):  usa AppData para no requerir permisos de escritura
+if getattr(sys, 'frozen', False):
+    DB_PATH = APPDATA_DIR / DB_FILE   # exe instalado → AppData
+else:
+    DB_PATH = BASE_DIR / DB_FILE      # desarrollo → raíz del proyecto
+
+# 📌 Logs en AppData
 LOGS_DIR = APPDATA_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
@@ -38,23 +43,26 @@ LOGS_DIR.mkdir(exist_ok=True)
 # ==============================================================================
 
 def copiar_base_si_no_existe():
-    if DB_PATH.exists():
-        DB_PATH.unlink()  # 🔥 eliminar base vacía SIEMPRE
+    """
+    En desarrollo: no hace nada (DB_PATH ya apunta a la raíz del proyecto).
+    En producción (.exe): copia la BD desde default_db/ a AppData si no existe.
+    """
+    if not getattr(sys, 'frozen', False):
+        # Desarrollo: DB_PATH = raíz del proyecto, no hay nada que copiar
+        if not DB_PATH.exists():
+            print("ℹ️  DB no encontrada en raíz del proyecto — se creará vacía.")
+        return
 
-    if getattr(sys, 'frozen', False):
-        base_path = Path(sys.executable).parent
-    else:
-        base_path = BASE_DIR
+    # Producción: copiar desde default_db/ a AppData si no existe con datos
+    if DB_PATH.exists() and DB_PATH.stat().st_size > 8192:
+        return  # ya tiene datos reales
 
-    origen = base_path / "default_db" / DB_FILE
-
+    origen = Path(sys.executable).parent / "default_db" / DB_FILE
     if origen.exists():
         shutil.copy2(origen, DB_PATH)
-        print("Base original copiada correctamente.")
+        print("✅ BD copiada desde default_db/")
     else:
-        raise FileNotFoundError(
-            f"No se encontró base original en {origen}"
-        )
+        print("ℹ️  default_db no encontrada — se creará BD vacía en AppData.")
 
 
 def copiar_base_original():

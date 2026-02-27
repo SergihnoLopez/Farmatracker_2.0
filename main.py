@@ -105,7 +105,29 @@ proc bgerror {msg} {
 # MAIN
 # ==============================================================================
 
+
+def _suprimir_phantom_tk():
+    """
+    Elimina la ventana fantasma '.tk' que aparece antes de que CTk
+    cree su propia ventana principal.
+
+    Causa: customtkinter inicializa internamente un Tk() al importarse,
+    y ese Tk queda visible hasta que CTk() toma control. También puede
+    venir de imports de módulos que usan tkinter antes de CTk.
+
+    Solución: crear y ocultar ese Tk fantasma explícitamente ANTES de
+    que lo cree CTk, de modo que CTk lo recicle como su propio root.
+    """
+    try:
+        import tkinter as _tk
+        _phantom = _tk.Tk()
+        _phantom.withdraw()          # ocultarlo de inmediato
+        _phantom.wm_attributes("-alpha", 0)  # transparente por si acaso
+    except Exception:
+        pass  # si falla, continuar normalmente
+
 def main():
+    _suprimir_phantom_tk()   # ← eliminar ventana fantasma
     verificar_dependencias()
 
     # 🔥 PASO 1 — Copiar base original a AppData si hace falta
