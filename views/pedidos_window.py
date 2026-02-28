@@ -3,7 +3,7 @@ Ventana de módulo de pedidos
 ✅ MEJORADO: Integración con extractor SIP
 """
 from tkinter import (Toplevel, Frame, Label, Entry, Button, Menu,
-                     messagebox, END, W, BOTH, LEFT, RIGHT, Y)
+                     Listbox, Scrollbar, messagebox, END, W, BOTH, LEFT, RIGHT, Y)
 from tkinter import ttk
 from config.settings import FONT_STYLE, BTN_COLOR, BTN_FG
 from models.database import DatabaseManager, get_db_connection
@@ -29,18 +29,35 @@ class PedidosWindow:
 
         Label(frame_busqueda, text="Buscar producto:", font=FONT_STYLE).pack(side=LEFT, padx=5)
 
-        self.entry_busqueda = Entry(frame_busqueda, font=FONT_STYLE)
+        self.entry_busqueda = Entry(frame_busqueda, font=FONT_STYLE, width=40)
         self.entry_busqueda.pack(side=LEFT, padx=5)
-        self.entry_busqueda.bind("<Return>", lambda e: self._buscar_productos())
+        self.entry_busqueda.focus()
 
-        Button(
-            frame_busqueda,
-            text="Buscar",
-            command=self._buscar_productos,
-            font=FONT_STYLE,
-            bg=BTN_COLOR,
-            fg=BTN_FG
-        ).pack(side=LEFT, padx=5)
+        # ── Lista flotante de sugerencias ────────────────────────────────────
+        # Contenedor con borde y scrollbar (igual que módulo de ventas)
+        self._frame_sug = Frame(self.window, bd=2, relief="solid", bg="white")
+        self._frame_sug.place_forget()
+
+        self._sug_sb = Scrollbar(self._frame_sug, orient="vertical")
+        self.lista_sugerencias = Listbox(
+            self._frame_sug, height=10, font=("Arial", 10),
+            yscrollcommand=self._sug_sb.set,
+            selectbackground="#003B8E", selectforeground="white",
+            bg="white", activestyle="dotbox", exportselection=False
+        )
+        self._sug_sb.config(command=self.lista_sugerencias.yview)
+        self._sug_sb.pack(side=RIGHT, fill=Y)
+        self.lista_sugerencias.pack(side=LEFT, fill=BOTH, expand=True)
+
+        self.entry_busqueda.bind("<KeyRelease>", self._buscar_sugerencias)
+        self.entry_busqueda.bind("<Return>",     self._enter_busqueda)
+        self.entry_busqueda.bind("<Down>",       self._bajar_sugerencia)
+        self.entry_busqueda.bind("<Up>",         self._subir_sugerencia)
+        self.lista_sugerencias.bind("<Double-1>",    self._seleccionar_sugerencia)
+        self.lista_sugerencias.bind("<Return>",      self._seleccionar_sugerencia)
+        self.lista_sugerencias.bind("<Escape>",      lambda e: self._ocultar_sugerencias())
+        # Cerrar sugerencias si se hace clic fuera
+        self.window.bind("<Button-1>", self._cerrar_si_fuera, add="+")
 
         # Treeview de productos disponibles
         Label(self.window, text="Productos Disponibles", font=("Titillium Web", 12, "bold")).pack(pady=5)
@@ -149,6 +166,136 @@ class PedidosWindow:
             command=mostrar_menu
         )
         self.boton_menu.pack(pady=10)
+
+    # ── Autocompletado de búsqueda ─────────────────────────────────────────────
+
+    # ── Sugerencias predictivas ───────────────────────────────────────────────
+
+    def _ocultar_sugerencias(self):
+        self._frame_sug.place_forget()
+
+    def _cerrar_si_fuera(self, event):
+        def _check():
+            try:
+                w = event.widget
+                while w is not None:
+                    if w is self._frame_sug:
+                        return
+                    w = getattr(w, "master", None)
+                self._ocultar_sugerencias()
+            except Exception:
+                pass
+        self.window.after(100, _check)
+
+    def _bajar_sugerencia(self, event=None):
+        if not self._frame_sug.winfo_ismapped():
+            return
+        sel = self.lista_sugerencias.curselection()
+        nxt = (sel[0] + 1) if sel else 0
+        if nxt < self.lista_sugerencias.size():
+            self.lista_sugerencias.selection_clear(0, END)
+            self.lista_sugerencias.selection_set(nxt)
+            self.lista_sugerencias.activate(nxt)
+            self.lista_sugerencias.see(nxt)
+
+    def _subir_sugerencia(self, event=None):
+        if not self._frame_sug.winfo_ismapped():
+            return
+        sel = self.lista_sugerencias.curselection()
+        if sel and sel[0] > 0:
+            nxt = sel[0] - 1
+            self.lista_sugerencias.selection_clear(0, END)
+            self.lista_sugerencias.selection_set(nxt)
+            self.lista_sugerencias.activate(nxt)
+            self.lista_sugerencias.see(nxt)
+
+    def _buscar_sugerencias(self, event):
+        """Muestra sugerencias flotantes mientras se escribe"""
+        if event.keysym in ("Return", "Up", "Down", "Escape", "Tab"):
+            return
+
+        texto = self.entry_busqueda.get().strip()
+        if not texto:
+            self._ocultar_sugerencias()
+            return
+
+        try:
+            resultados = DatabaseManager.buscar_productos_like(texto)
+        except Exception:
+            resultados = []
+
+        if resultados:
+            self.lista_sugerencias.delete(0, END)
+            for item in resultados:
+                cod  = item[0]
+                desc = item[1]
+                try:
+                    stock_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
+                    stock_str = str(int(stock_val)) if stock_val == int(stock_val) else str(stock_val)
+                except (ValueError, TypeError):
+                    stock_str = "0"
+                self.lista_sugerencias.insert(END, f"{cod} - {desc} (Stock: {stock_str})")
+
+            # Seleccionar primer ítem automáticamente
+            self.lista_sugerencias.selection_set(0)
+            self.lista_sugerencias.activate(0)
+
+            # Posicionar debajo del entry
+            self.window.update_idletasks()
+            x = self.entry_busqueda.winfo_rootx() - self.window.winfo_rootx()
+            y = (self.entry_busqueda.winfo_rooty() - self.window.winfo_rooty()
+                 + self.entry_busqueda.winfo_height())
+            ancho = max(self.entry_busqueda.winfo_width(), 700)
+            self._frame_sug.place(x=x, y=y, width=ancho)
+            self._frame_sug.lift()
+        else:
+            self._ocultar_sugerencias()
+
+    def _enter_busqueda(self, event=None):
+        """Enter: si hay sugerencias visibles selecciona; si no, busca por código exacto."""
+        if self._frame_sug.winfo_ismapped():
+            if not self.lista_sugerencias.curselection() and self.lista_sugerencias.size() > 0:
+                self.lista_sugerencias.selection_set(0)
+            self._seleccionar_sugerencia()
+        else:
+            self._buscar_productos()
+
+    def _seleccionar_sugerencia(self, event=None):
+        """Selecciona producto de la lista y lo carga en el treeview"""
+        if not self.lista_sugerencias.curselection():
+            return
+        seleccion = self.lista_sugerencias.get(self.lista_sugerencias.curselection())
+        codigo = seleccion.split(" - ")[0].strip()
+        self._ocultar_sugerencias()
+        self.entry_busqueda.delete(0, END)
+        self.entry_busqueda.insert(0, codigo)
+        self._cargar_producto_en_tree(codigo)
+        self.entry_cantidad.focus()
+
+    def _cargar_producto_en_tree(self, codigo: str):
+        """Carga un producto específico por código en el treeview de productos disponibles"""
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id_producto, codigo_barras, descripcion, cantidad, proveedor, precio_compra
+                    FROM productos WHERE codigo_barras = ?
+                """, (codigo,))
+                producto = cursor.fetchone()
+
+                if producto:
+                    for item in self.tree_productos.get_children():
+                        self.tree_productos.delete(item)
+                    fila_lista = list(producto)
+                    fila_lista[5] = format_precio_display(float(fila_lista[5]))
+                    self.tree_productos.insert("", "end", values=fila_lista)
+                    # Seleccionar automáticamente
+                    children = self.tree_productos.get_children()
+                    if children:
+                        self.tree_productos.selection_set(children[0])
+                        self.tree_productos.focus(children[0])
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar producto: {e}")
 
     def _buscar_productos(self):
         """Busca productos en el inventario"""

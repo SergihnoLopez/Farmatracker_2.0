@@ -21,10 +21,24 @@ _RESOURCES_DIR = os.path.join(_BASE_DIR, "resources")
 class FacturaGenerator:
     """Genera facturas en formato PDF térmico (ticket 72 mm)"""
 
-    def __init__(self, productos_venta: list):
+    def __init__(self, productos_venta: list, fecha: str = None):
+        """
+        productos_venta : lista de productos a imprimir.
+        fecha           : fecha/hora del registro con formato
+                          'YYYY-MM-DD HH:MM:SS'.
+                          Si es None usa datetime.now() (comportamiento original).
+        """
         self.productos   = productos_venta
         self.ancho_papel = 72
         self.ancho_texto = 68
+        if fecha:
+            try:
+                dt = datetime.strptime(str(fecha), "%Y-%m-%d %H:%M:%S")
+                self._fecha_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+            except ValueError:
+                self._fecha_str = str(fecha)
+        else:
+            self._fecha_str = None
 
     def generar(self, output_path: str = "factura_flexible.pdf") -> bool:
         """Genera el PDF de la factura."""
@@ -90,7 +104,7 @@ class FacturaGenerator:
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         pdf.cell(self.ancho_texto, 5,
-                 self._upper(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"),
+                 self._upper(f"Fecha: {self._fecha_str or datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.cell(self.ancho_texto, 5, self._upper("Cajero: Principal"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -127,10 +141,10 @@ class FacturaGenerator:
 
             total += subtotal
 
-            if impuesto_str == "19% IVA":
-                precio_base  = precio_unitario / 1.19
-                iva_unitario = precio_unitario - precio_base
-                total_iva   += iva_unitario * cantidad
+            # IVA: soporta "19%  IVA" (2 espacios) y "19% IVA" (1 espacio)
+            if impuesto_str in ("19%  IVA", "19% IVA"):
+                # El subtotal ya incluye IVA; la fracción correcta es 19/119
+                total_iva += subtotal * (19 / 119)
 
             pdf.set_font("ArialNarrow", "B", 14)
             pdf.cell(self.ancho_texto, 5, f"CÓDIGO: {codigo}",
@@ -157,9 +171,15 @@ class FacturaGenerator:
         pdf.cell(self.ancho_texto, 5, separador, align="C",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("ArialNarrow", "B", 14)
+
+        subtotal_sin_iva = total - total_iva
         pdf.cell(self.ancho_texto, 6,
-                 self._upper(f"IVA TOTAL: {self._fmt(total_iva)}"),
+                 self._upper(f"SUBTOTAL: {self._fmt(subtotal_sin_iva)}"),
                  align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(self.ancho_texto, 6,
+                 self._upper(f"IVA (19%): {self._fmt(total_iva)}"),
+                 align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
         pdf.set_font("ArialNarrowBold", "", 16)
         pdf.cell(self.ancho_texto, 7,
                  self._upper(f"TOTAL: {self._fmt(total)}"),

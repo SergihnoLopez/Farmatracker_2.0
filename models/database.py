@@ -183,14 +183,16 @@ class DatabaseManager:
 
     @staticmethod
     def buscar_productos_like(texto: str, limit: int = 80) -> List[Tuple]:
-        """Busca productos por coincidencia parcial"""
+        """Busca productos por coincidencia parcial.
+        Retorna tuplas (codigo_barras, descripcion, cantidad).
+        """
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """SELECT codigo_barras, descripcion 
-                       FROM productos 
-                       WHERE descripcion LIKE ? OR codigo_barras LIKE ? 
+                    """SELECT codigo_barras, descripcion, cantidad
+                       FROM productos
+                       WHERE descripcion LIKE ? OR codigo_barras LIKE ?
                        LIMIT ?""",
                     (f"%{texto}%", f"%{texto}%", limit)
                 )
@@ -583,8 +585,9 @@ class DatabaseManager:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """SELECT id_producto, codigo_barras, descripcion, cantidad, 
-                       precio_compra, precio_venta, impuesto, fecha_vencimiento
+                    """SELECT id_producto, codigo_barras, descripcion, cantidad,
+                       proveedor, precio_compra, precio_venta, unidad, impuesto,
+                       bonificacion, grupo, subgrupo, fecha_vencimiento
                        FROM productos WHERE codigo_barras = ?""",
                     (codigo,)
                 )
@@ -596,18 +599,19 @@ class DatabaseManager:
 
     @staticmethod
     def buscar_productos_like(texto: str, limit: int = 80) -> List[Tuple]:
-        """Busca productos por coincidencia parcial"""
+        """Busca productos por coincidencia parcial.
+        Retorna tuplas (codigo_barras, descripcion, cantidad).
+        """
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """SELECT codigo_barras, descripcion 
-                       FROM productos 
-                       WHERE descripcion LIKE ? OR codigo_barras LIKE ? 
+                    """SELECT codigo_barras, descripcion, cantidad
+                       FROM productos
+                       WHERE descripcion LIKE ? OR codigo_barras LIKE ?
                        LIMIT ?""",
                     (f"%{texto}%", f"%{texto}%", limit)
                 )
-                # Convertir Row objects a tuplas simples
                 rows = cursor.fetchall()
                 return [tuple(row) for row in rows]
         except sqlite3.Error as e:
@@ -616,12 +620,11 @@ class DatabaseManager:
 
     @staticmethod
     def obtener_todos_productos() -> List[Tuple]:
-        """Obtiene todos los productos (usar con paginación en producción)"""
+        """Obtiene todos los productos"""
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM productos")
-                # Convertir Row objects a tuplas simples
                 rows = cursor.fetchall()
                 return [tuple(row) for row in rows]
         except sqlite3.Error as e:

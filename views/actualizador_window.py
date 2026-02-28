@@ -2,13 +2,17 @@
 Ventana de actualización de inventario
 ✅ MEJORADO: Funcionalidad completa con edición inline y formulario de productos nuevos
 ✅ FRACCIÓN: Cantidad acepta decimales (ej: 0.2, 1.5, 0.333)
+✅ FECHA VENCIMIENTO: DatePicker inline después de ingresar cantidad
 """
-from tkinter import Toplevel, Frame, Label, Entry, Button, W, END
+from tkinter import Toplevel, Frame, Label, Entry, Button, W, END, Spinbox
 from tkinter import ttk, messagebox
+import tkinter as tk
 from config.settings import FONT_STYLE, BTN_COLOR, BTN_FG
 from models.database import DatabaseManager, get_db_connection
 from utils.validators import validate_codigo_barras
 import logging
+from datetime import datetime, date
+import calendar
 
 
 def _parse_cantidad_float(valor: str):
@@ -64,7 +68,7 @@ class ActualizadorWindow:
 
         self.entry_cantidad = Entry(frame_cantidad, font=FONT_STYLE, width=10)
         self.entry_cantidad.pack(side="left", padx=5)
-        self.entry_cantidad.bind("<Return>", self._actualizar_cantidad)
+        self.entry_cantidad.bind("<Return>", self._confirmar_cantidad)
 
         Label(
             frame_cantidad,
@@ -72,6 +76,76 @@ class ActualizadorWindow:
             font=("Arial", 9),
             fg="#888888"
         ).pack(side="left", padx=5)
+
+        # ── Frame Fecha de Vencimiento (DatePicker inline) ────────────────────
+        self.frame_fecha = Frame(self.window)
+        self.frame_fecha.pack(pady=10)
+
+        Label(self.frame_fecha, text="Fecha de Vencimiento:", font=FONT_STYLE).pack(side="left", padx=5)
+
+        # Día / Mes / Año con Spinbox
+        hoy = date.today()
+
+        self.spin_dia = Spinbox(self.frame_fecha, from_=1, to=31, width=4,
+                                font=FONT_STYLE, justify="center",
+                                command=self._validar_dia)
+        self.spin_dia.pack(side="left")
+        self.spin_dia.delete(0, END)
+        self.spin_dia.insert(0, str(hoy.day).zfill(2))
+
+        Label(self.frame_fecha, text="/", font=FONT_STYLE).pack(side="left")
+
+        self.spin_mes = Spinbox(self.frame_fecha, from_=1, to=12, width=4,
+                                font=FONT_STYLE, justify="center",
+                                command=self._validar_dia)
+        self.spin_mes.pack(side="left")
+        self.spin_mes.delete(0, END)
+        self.spin_mes.insert(0, str(hoy.month).zfill(2))
+
+        Label(self.frame_fecha, text="/", font=FONT_STYLE).pack(side="left")
+
+        self.spin_anio = Spinbox(self.frame_fecha, from_=2020, to=2040, width=6,
+                                 font=FONT_STYLE, justify="center")
+        self.spin_anio.pack(side="left")
+        self.spin_anio.delete(0, END)
+        self.spin_anio.insert(0, str(hoy.year))
+
+        Button(
+            self.frame_fecha,
+            text="✔ Confirmar Fecha",
+            font=FONT_STYLE,
+            bg="#4CAF50",
+            fg="white",
+            command=self._confirmar_fecha
+        ).pack(side="left", padx=10)
+
+        # Tecla Enter en Año → confirma fecha
+        self.spin_anio.bind("<Return>", lambda e: self._confirmar_fecha())
+        self.spin_mes.bind("<Return>", lambda e: self.spin_anio.focus_set())
+        self.spin_dia.bind("<Return>", lambda e: self.spin_mes.focus_set())
+
+        Label(
+            self.frame_fecha,
+            text="(Opcional — Enter para omitir)",
+            font=("Arial", 9),
+            fg="#888888"
+        ).pack(side="left", padx=5)
+
+        # Botón para omitir fecha (solo actualiza cantidad)
+        Button(
+            self.frame_fecha,
+            text="⏭ Omitir Fecha",
+            font=("Arial", 9),
+            bg="#FF9800",
+            fg="white",
+            command=self._omitir_fecha
+        ).pack(side="left", padx=5)
+
+        # Inicialmente ocultar el frame de fecha
+        self.frame_fecha.pack_forget()
+
+        # Cantidad temporal guardada antes de pedir fecha
+        self._cantidad_pendiente = None
 
         # Doble clic para editar
         self.tree.bind("<Double-1>", self._editar_celda)
@@ -110,9 +184,119 @@ class ActualizadorWindow:
             logging.error(f"Error en búsqueda: {e}")
             messagebox.showerror("Error", f"Error al buscar producto: {e}")
 
+    def _confirmar_cantidad(self, event=None):
+        """
+        Valida la cantidad ingresada y abre el DatePicker de vencimiento.
+        """
+        valor = self.entry_cantidad.get().strip()
+        cantidad = _parse_cantidad_float(valor)
+        if cantidad is None:
+            messagebox.showerror(
+                "Error",
+                "Ingrese una cantidad válida.\n"
+                "Puede usar decimales: 1, 0.5, 0.2, 1.333..."
+            )
+            return
+
+        items = self.tree.get_children()
+        if not items:
+            return
+
+        self._cantidad_pendiente = cantidad
+        # Mostrar frame de fecha y dar foco al día
+        self.frame_fecha.pack(pady=10)
+        self.spin_dia.focus_set()
+
+    def _validar_dia(self):
+        """Ajusta el día máximo según el mes y año seleccionados."""
+        try:
+            mes = int(self.spin_mes.get())
+            anio = int(self.spin_anio.get())
+            max_dia = calendar.monthrange(anio, mes)[1]
+            self.spin_dia.config(to=max_dia)
+        except (ValueError, TypeError):
+            pass
+
+    def _confirmar_fecha(self, event=None):
+        """Confirma la fecha seleccionada, actualiza BD y vuelve al inicio."""
+        try:
+            dia  = int(self.spin_dia.get())
+            mes  = int(self.spin_mes.get())
+            anio = int(self.spin_anio.get())
+            fecha_obj = date(anio, mes, dia)
+            fecha_str = fecha_obj.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            messagebox.showerror("Error", "Fecha inválida. Revise día, mes y año.")
+            self.spin_dia.focus_set()
+            return
+
+        self._guardar_actualizacion(fecha_str)
+
+    def _omitir_fecha(self, event=None):
+        """Actualiza solo la cantidad, sin modificar fecha de vencimiento."""
+        self._guardar_actualizacion(None)
+
+    def _guardar_actualizacion(self, fecha_str):
+        """
+        Guarda cantidad (y opcionalmente fecha_vencimiento) en la BD.
+        Luego reinicia el formulario para escanear un nuevo producto.
+        """
+        if self._cantidad_pendiente is None:
+            return
+
+        cantidad = self._cantidad_pendiente
+        items = self.tree.get_children()
+        if not items:
+            return
+
+        item_id = items[0]
+        valores = list(self.tree.item(item_id, "values"))
+        id_prod = valores[0]
+
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                if fecha_str:
+                    cursor.execute(
+                        "UPDATE productos SET cantidad = ?, fecha_vencimiento = ? WHERE id_producto = ?",
+                        (cantidad, fecha_str, int(id_prod))
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE productos SET cantidad = ? WHERE id_producto = ?",
+                        (cantidad, int(id_prod))
+                    )
+                exito = cursor.rowcount > 0
+        except Exception as e:
+            logging.error(f"Error al actualizar producto: {e}")
+            exito = False
+
+        if exito:
+            cantidad_display = int(cantidad) if cantidad == int(cantidad) else round(cantidad, 6)
+            valores[3] = cantidad_display
+            if fecha_str:
+                valores[7] = fecha_str
+            self.tree.item(item_id, values=valores)
+
+            msg = f"✅ Actualizado: cantidad={cantidad_display}"
+            if fecha_str:
+                msg += f", vencimiento={fecha_str}"
+            # Toast breve — no detiene el flujo
+            self.window.title(msg)
+            self.window.after(2000, lambda: self.window.title("Actualizar Inventario"))
+        else:
+            messagebox.showerror("Error", "No se pudo actualizar el producto")
+
+        # Reiniciar para siguiente escaneo
+        self._cantidad_pendiente = None
+        self.frame_fecha.pack_forget()
+        self.entry_cantidad.delete(0, END)
+        self.entry_codigo.delete(0, END)
+        self.entry_codigo.focus()
+
     def _actualizar_cantidad(self, event=None):
         """
-        Actualiza la cantidad del producto.
+        Mantiene compatibilidad con doble clic en treeview (edición inline).
         ✅ FRACCIÓN: acepta decimales como 0.2 o 1.5
         """
         valor = self.entry_cantidad.get().strip()

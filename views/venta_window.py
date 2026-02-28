@@ -5,6 +5,10 @@ Ventana de Ventas - FarmaProStocker
    - Muestra opciones de fracción con precio proporcional
    - Cancelar restaura la unidad completa original
    - Descuenta fracción decimal del inventario
+✅ Servicios rápidos: Inyectología, Toma de Tensión, Curaciones, Otros
+   - Sin afectar inventario
+   - Precio editable con doble clic
+   - Utilidad 100% (sin impuestos ni cargos)
 """
 from tkinter import (Toplevel, Frame, Label, Entry, Button, Listbox,
                      messagebox, END, W, BOTH, Toplevel as ToplevelAlias)
@@ -14,6 +18,7 @@ from pathlib import Path
 from config.settings import FONT_STYLE, BTN_COLOR, BTN_FG
 from models.database import DatabaseManager
 from controllers.ventas import VentasController
+from views.kit_window import KitWindow
 
 # ── Fuentes opcionales ────────────────────────────────────────────────────────
 _FONT_REGULAR = Path(__file__).parent.parent / "resources" / "ArialNarrow.ttf"
@@ -35,6 +40,16 @@ OPCIONES_FRACCION = [
     ("30 — Unidad   (caja×30)",      30, 30),
     ("10 — Sobre×10 (caja de 100)", 100, 10),
     ("100 — Unidad  (caja de 100)", 100, 100),
+]
+
+# ==============================================================================
+# SERVICIOS — código especial SVC-*, sin descuento de inventario, impuesto=0
+# ==============================================================================
+SERVICIOS = [
+    {"codigo": "SVC-INYEC",   "descripcion": "INYECTOLOGÍA",    "precio": 2000, "emoji": "💉"},
+    {"codigo": "SVC-TENSION", "descripcion": "TOMA DE TENSIÓN", "precio": 1000, "emoji": "🩺"},
+    {"codigo": "SVC-CURAC",   "descripcion": "CURACIONES",      "precio": 8000, "emoji": "🩹"},
+    {"codigo": "SVC-OTROS",   "descripcion": "OTROS SERVICIOS", "precio": 5000, "emoji": "➕"},
 ]
 
 
@@ -90,7 +105,9 @@ class VentaWindow:
         self.tree = ttk.Treeview(
             self.window,
             columns=("codigo_barras", "descripcion", "cantidad",
-                     "precio_unitario", "subtotal", "impuesto"),
+                     "precio_unitario", "subtotal", "impuesto", "kit_data"),
+            displaycolumns=("codigo_barras", "descripcion", "cantidad",
+                            "precio_unitario", "subtotal", "impuesto"),
             show="headings",
         )
         self.tree.heading("codigo_barras",   text="Código")
@@ -113,6 +130,44 @@ class VentaWindow:
         # Doble clic: col Precio Unit. → editar precio | col Cantidad → fraccionar si CJ
         self.tree.bind("<Double-1>", self._on_double_click_tree)
 
+        # ── Botones de Servicios Rápidos ──────────────────────────────────────
+        frame_servicios_outer = Frame(self.window)
+        frame_servicios_outer.pack(pady=(2, 0))
+
+        Label(
+            frame_servicios_outer,
+            text="💊 Servicios  (doble clic en la fila para editar precio):",
+            font=("Titillium Web", 10, "bold"),
+            fg="#555555"
+        ).pack(anchor="w", padx=10)
+
+        frame_servicios = Frame(frame_servicios_outer)
+        frame_servicios.pack(pady=4)
+
+        # Colores por servicio
+        _colores = ["#7B1FA2", "#00796B", "#E65100", "#1565C0"]
+        self._servicios_precios = {}   # codigo → precio vigente (editable en runtime)
+
+        for i, svc in enumerate(SERVICIOS):
+            precio_inicial = svc["precio"]
+            self._servicios_precios[svc["codigo"]] = precio_inicial
+
+            btn = Button(
+                frame_servicios,
+                text=f"{svc['emoji']}  {svc['descripcion']}\n${precio_inicial:,.0f}".replace(",", "."),
+                font=("Titillium Web", 11, "bold"),
+                bg=_colores[i % len(_colores)],
+                fg="white",
+                width=18,
+                height=2,
+                relief="raised",
+                cursor="hand2",
+                command=lambda s=svc: self._agregar_servicio(s["codigo"])
+            )
+            btn.pack(side="left", padx=6)
+            # Guardar referencia para actualizar etiqueta cuando cambie precio
+            svc["_btn_ref"] = btn
+
         self.total_label = Label(
             self.window,
             text="Total: $0.00",
@@ -127,6 +182,10 @@ class VentaWindow:
         Button(frame_botones, text="Eliminar Producto",
                font=FONT_STYLE, bg="#f44336", fg="white",
                command=self._eliminar_producto, width=18).pack(side="left", padx=5)
+
+        Button(frame_botones, text="🧪 Armar Kit",
+               font=FONT_STYLE, bg="#7B1FA2", fg="white",
+               command=self._abrir_armar_kit, width=16).pack(side="left", padx=5)
 
         Button(frame_botones, text="Registrar Venta",
                font=FONT_STYLE, bg=BTN_COLOR, fg=BTN_FG,
@@ -149,8 +208,17 @@ class VentaWindow:
         resultados = DatabaseManager.buscar_productos_like(texto)
         if resultados:
             self.lista_sugerencias.delete(0, END)
-            for cod, desc in resultados:
-                self.lista_sugerencias.insert(END, f"{cod} - {desc}")
+            for item in resultados:
+                cod  = item[0]
+                desc = item[1]
+                # buscar_productos_like retorna (codigo, descripcion, cantidad)
+                # Se respetan decimales: 48.0 → "48"  |  0.15 → "0.15"
+                try:
+                    stock_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
+                    stock_str = str(int(stock_val)) if stock_val == int(stock_val) else str(stock_val)
+                except (ValueError, TypeError):
+                    stock_str = "0"
+                self.lista_sugerencias.insert(END, f"{cod} - {desc} (Stock: {stock_str})")
 
             x = self.codigo_entry.winfo_rootx() - self.window.winfo_rootx()
             y = (self.codigo_entry.winfo_rooty() - self.window.winfo_rooty()
@@ -186,6 +254,34 @@ class VentaWindow:
         self.total_label.config(text=f"Total: ${total:,.0f}".replace(",", "."))
 
     # ──────────────────────────────────────────────────────────────────────────
+    # SERVICIOS RÁPIDOS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _agregar_servicio(self, codigo_svc: str):
+        """
+        Agrega un servicio a la venta. Sin afectar inventario.
+        Impuesto = 0%, utilidad = 100%.
+        """
+        svc = next((s for s in SERVICIOS if s["codigo"] == codigo_svc), None)
+        if not svc:
+            return
+
+        precio = self._servicios_precios.get(codigo_svc, svc["precio"])
+        subtotal = precio * 1  # cantidad siempre 1 por fila (se puede editar)
+
+        self.tree.insert("", END, values=(
+            codigo_svc,
+            svc["descripcion"],
+            1,
+            precio,
+            subtotal,
+            "0%",
+            ''  # kit_data vacío para servicios
+        ))
+        self._actualizar_total()
+        self.codigo_entry.focus()
+
+    # ──────────────────────────────────────────────────────────────────────────
     # ✅ EDICIÓN DE PRECIO CON DOBLE CLIC
     # ──────────────────────────────────────────────────────────────────────────
 
@@ -193,8 +289,9 @@ class VentaWindow:
         """
         Doble clic en el treeview:
           #3 (Cantidad)     → si und=CJ abre diálogo de fraccionamiento,
+                              si es servicio SVC- edita cantidad sin stock,
                               si no, abre editor de cantidad normal.
-          #4 (Precio Unit.) → abre editor de precio.
+          #4 (Precio Unit.) → abre editor de precio (productos y servicios).
         """
         region = self.tree.identify("region", event.x, event.y)
         if region != "cell":
@@ -205,19 +302,27 @@ class VentaWindow:
         if not row:
             return
 
+        valores = list(self.tree.item(row, "values"))
+        codigo = valores[0]
+        es_servicio = str(codigo).startswith("SVC-")
+
         if col == "#3":
-            valores = list(self.tree.item(row, "values"))
-            codigo = valores[0]
-            producto = DatabaseManager.buscar_producto_por_codigo(codigo)
-            unidad = str(producto.get("unidad", "")).strip().upper() if producto else ""
-            if unidad == "CJ":
-                self._mostrar_dialogo_fraccion(row, valores, producto)
+            if es_servicio:
+                self._editar_cantidad_servicio(row)
             else:
-                self._editar_cantidad(row)
+                producto = DatabaseManager.buscar_producto_por_codigo(codigo)
+                unidad = str(producto.get("unidad", "")).strip().upper() if producto else ""
+                if unidad == "CJ":
+                    self._mostrar_dialogo_fraccion(row, valores, producto)
+                else:
+                    self._editar_cantidad(row)
             return
 
         if col == "#4":
-            self._editar_precio_unitario(row)
+            if es_servicio:
+                self._editar_precio_servicio(row, codigo)
+            else:
+                self._editar_precio_unitario(row)
 
     def _editar_precio_unitario(self, item_id):
         """Muestra un Entry flotante sobre la celda de precio para editarlo."""
@@ -267,6 +372,102 @@ class VentaWindow:
         editor.bind("<Tab>",      confirmar)
         editor.bind("<Escape>",   cancelar)
         editor.bind("<FocusOut>", cancelar)
+
+    def _editar_precio_servicio(self, item_id, codigo_svc: str):
+        """
+        Edita el precio de un servicio en la fila seleccionada.
+        Actualiza también el precio por defecto del botón para esa sesión.
+        """
+        bbox = self.tree.bbox(item_id, "#4")
+        if not bbox:
+            return
+        x, y, w, h = bbox
+
+        valores = list(self.tree.item(item_id, "values"))
+        precio_actual = str(valores[3])
+
+        editor = Entry(self.tree, font=FONT_STYLE, justify="right")
+        editor.place(x=x, y=y, width=w, height=h)
+        editor.insert(0, precio_actual)
+        editor.select_range(0, END)
+        editor.focus_set()
+
+        def confirmar(event=None):
+            nuevo_str = editor.get().strip().replace(".", "").replace(",", "")
+            try:
+                nuevo_precio = float(nuevo_str)
+                if nuevo_precio < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Error", "Precio inválido. Ingrese un número positivo.")
+                editor.destroy()
+                return
+
+            try:
+                cantidad = float(valores[2])
+            except (ValueError, IndexError):
+                cantidad = 1.0
+
+            nuevo_subtotal = nuevo_precio * cantidad
+            valores[3] = nuevo_precio
+            valores[4] = nuevo_subtotal
+            self.tree.item(item_id, values=tuple(valores))
+
+            # Actualizar precio vigente en memoria y etiqueta del botón
+            self._servicios_precios[codigo_svc] = nuevo_precio
+            svc = next((s for s in SERVICIOS if s["codigo"] == codigo_svc), None)
+            if svc and svc.get("_btn_ref"):
+                svc["_btn_ref"].config(
+                    text=f"{svc['emoji']}  {svc['descripcion']}\n${nuevo_precio:,.0f}".replace(",", ".")
+                )
+
+            self._actualizar_total()
+            editor.destroy()
+
+        editor.bind("<Return>",   confirmar)
+        editor.bind("<Tab>",      confirmar)
+        editor.bind("<Escape>",   lambda e: editor.destroy())
+        editor.bind("<FocusOut>", lambda e: editor.destroy())
+
+    def _editar_cantidad_servicio(self, item_id):
+        """
+        Edita la cantidad de un servicio (sin verificación de stock).
+        """
+        bbox = self.tree.bbox(item_id, "#3")
+        if not bbox:
+            return
+        x, y, w, h = bbox
+
+        valores = list(self.tree.item(item_id, "values"))
+
+        editor = Entry(self.tree, font=FONT_STYLE, justify="center")
+        editor.place(x=x, y=y, width=w, height=h)
+        editor.insert(0, str(valores[2]))
+        editor.select_range(0, END)
+        editor.focus_set()
+
+        def confirmar(event=None):
+            try:
+                nueva_cant = float(editor.get().strip().replace(",", "."))
+                if nueva_cant <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Error", "Cantidad inválida.")
+                editor.focus_set()
+                return
+
+            precio_unitario = float(valores[3])
+            nuevo_subtotal = precio_unitario * nueva_cant
+            cant_display = int(nueva_cant) if nueva_cant == int(nueva_cant) else round(nueva_cant, 2)
+            valores[2] = cant_display
+            valores[4] = nuevo_subtotal
+            self.tree.item(item_id, values=tuple(valores))
+            self._actualizar_total()
+            editor.destroy()
+
+        editor.bind("<Return>", confirmar)
+        editor.bind("<Escape>", lambda e: editor.destroy())
+        editor.bind("<FocusOut>", lambda e: editor.destroy())
 
     # ──────────────────────────────────────────────────────────────────────────
     # FRACCIONAMIENTO Y EDICIÓN DE CANTIDAD
@@ -476,6 +677,10 @@ class VentaWindow:
     # ACCIONES PRINCIPALES
     # ──────────────────────────────────────────────────────────────────────────
 
+    def _abrir_armar_kit(self):
+        """Abre el formulario para armar un kit compuesto."""
+        KitWindow(self)
+
     def _eliminar_producto(self):
         selected = self.tree.selection()
         if not selected:
@@ -509,13 +714,18 @@ class VentaWindow:
         productos = []
         for item in items:
             v = self.tree.item(item, "values")
+            codigo = v[0] if v else ""
+            # Para kits, mostrar "KIT" en lugar del JSON de componentes
+            impuesto = v[5] if len(v) > 5 else ""
+            if str(codigo) == "KIT":
+                impuesto = "KIT"
             productos.append([
                 v[0],
                 v[1],
                 v[2],
                 v[3],
                 v[4],
-                v[5] if len(v) > 5 else "",
+                impuesto,
             ])
 
         try:
@@ -532,4 +742,3 @@ class VentaWindow:
                 messagebox.showerror("Error", "No se pudo generar el PDF.\nRevisa logs/farmatrack.log para detalles.")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar la factura:\n{e}")
-

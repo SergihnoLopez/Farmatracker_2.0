@@ -34,6 +34,7 @@ class InventarioWindow:
         self.window.grab_set()
         self.conn = None
         self._setup_ui()
+        self._cargar_proveedores()
         self._cargar_productos()
 
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -73,6 +74,37 @@ class InventarioWindow:
             width=18,
             command=self._buscar_y_reemplazar
         ).pack(side=RIGHT, padx=2)
+
+        # ============================================================
+        # FRAME FILTRO POR PROVEEDOR
+        # ============================================================
+        filter_frame = Frame(self.window)
+        filter_frame.pack(fill='x', padx=10, pady=(0, 4))
+
+        Label(
+            filter_frame,
+            text="🏭 Proveedor:",
+            font=FONT_STYLE
+        ).pack(side=LEFT, padx=(5, 4))
+
+        self.combo_proveedor = ttk.Combobox(
+            filter_frame,
+            font=FONT_STYLE,
+            width=35,
+            state="readonly"
+        )
+        self.combo_proveedor.pack(side=LEFT, padx=(0, 6))
+        self.combo_proveedor.bind("<<ComboboxSelected>>", lambda e: self._filtrar_proveedor())
+
+        Button(
+            filter_frame,
+            text="✖ Limpiar",
+            font=FONT_STYLE,
+            bg="#e53935",
+            fg="white",
+            width=10,
+            command=self._limpiar_filtro_proveedor
+        ).pack(side=LEFT, padx=2)
 
         # Botón Exportar a Excel
         Button(
@@ -248,43 +280,47 @@ class InventarioWindow:
 
     def _cargar_productos(self):
         """
-        ✅ CORREGIDO: Carga productos con SELECT en el orden correcto
+        ✅ CORREGIDO: Carga productos con SELECT en el orden correcto,
+        respetando el filtro de proveedor activo.
         """
         # Limpiar treeview
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        # Proveedor seleccionado desde el Combobox
+        proveedor_sel = None
+        val = self.combo_proveedor.get()
+        if val and val != "(Todos los proveedores)":
+            proveedor_sel = val
+
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # ✅ SELECT EN EL ORDEN EXACTO DE LAS COLUMNAS DEL TREEVIEW
-                cursor.execute("""
-                    SELECT 
-                        id_producto,
-                        codigo_barras,
-                        descripcion,
-                        cantidad,
-                        proveedor,
-                        precio_compra,
-                        precio_venta,
-                        unidad,
-                        impuesto,
-                        bonificacion,
-                        grupo,
-                        subgrupo,
-                        fecha_vencimiento
-                    FROM productos
-                    ORDER BY id_producto
-                """)
+                if proveedor_sel:
+                    cursor.execute("""
+                        SELECT
+                            id_producto, codigo_barras, descripcion, cantidad,
+                            proveedor, precio_compra, precio_venta, unidad,
+                            impuesto, bonificacion, grupo, subgrupo, fecha_vencimiento
+                        FROM productos
+                        WHERE TRIM(proveedor) = TRIM(?)
+                        ORDER BY id_producto
+                    """, (proveedor_sel,))
+                else:
+                    cursor.execute("""
+                        SELECT
+                            id_producto, codigo_barras, descripcion, cantidad,
+                            proveedor, precio_compra, precio_venta, unidad,
+                            impuesto, bonificacion, grupo, subgrupo, fecha_vencimiento
+                        FROM productos
+                        ORDER BY id_producto
+                    """)
 
                 productos = cursor.fetchall()
 
-                # ✅ Insertar productos (el orden ya coincide)
                 for producto in productos:
-                    # Convertir Row a tupla
-                    valores = tuple(producto)
-                    self.tree.insert("", "end", values=valores)
+                    self.tree.insert("", "end", values=tuple(producto))
 
                 logging.info(f"Cargados {len(productos)} productos en inventario")
 
@@ -294,54 +330,68 @@ class InventarioWindow:
 
         # Actualizar total
         self._actualizar_total()
-
     def _buscar(self):
-        """Busca productos por texto"""
+        """Busca productos por texto, combinando con el filtro de proveedor activo."""
         consulta = self.search_entry.get().strip().lower()
 
+        # Si no hay texto, recarga respetando el filtro de proveedor
         if not consulta:
             self._cargar_productos()
             return
+
+        # Proveedor seleccionado desde el Combobox
+        proveedor_sel = None
+        val = self.combo_proveedor.get()
+        if val and val != "(Todos los proveedores)":
+            proveedor_sel = val
 
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # ✅ SELECT EN EL ORDEN CORRECTO
-                cursor.execute("""
-                    SELECT 
-                        id_producto,
-                        codigo_barras,
-                        descripcion,
-                        cantidad,
-                        proveedor,
-                        precio_compra,
-                        precio_venta,
-                        unidad,
-                        impuesto,
-                        bonificacion,
-                        grupo,
-                        subgrupo,
-                        fecha_vencimiento
-                    FROM productos
-                    WHERE LOWER(codigo_barras) LIKE ?
-                       OR LOWER(descripcion) LIKE ?
-                       OR LOWER(proveedor) LIKE ?
-                       OR LOWER(grupo) LIKE ?
-                       OR LOWER(subgrupo) LIKE ?
-                """, (f"%{consulta}%", f"%{consulta}%", f"%{consulta}%",
-                      f"%{consulta}%", f"%{consulta}%"))
+                params = [f"%{consulta}%"] * 5
 
+                if proveedor_sel:
+                    _SELECT = """
+                        SELECT
+                            id_producto, codigo_barras, descripcion, cantidad,
+                            proveedor, precio_compra, precio_venta, unidad,
+                            impuesto, bonificacion, grupo, subgrupo, fecha_vencimiento
+                        FROM productos
+                        WHERE (
+                            LOWER(codigo_barras) LIKE ?
+                            OR LOWER(descripcion) LIKE ?
+                            OR LOWER(proveedor)   LIKE ?
+                            OR LOWER(grupo)       LIKE ?
+                            OR LOWER(subgrupo)    LIKE ?
+                        )
+                        AND TRIM(LOWER(proveedor)) = TRIM(LOWER(?))
+                    """
+                    params.append(proveedor_sel)
+                else:
+                    _SELECT = """
+                        SELECT
+                            id_producto, codigo_barras, descripcion, cantidad,
+                            proveedor, precio_compra, precio_venta, unidad,
+                            impuesto, bonificacion, grupo, subgrupo, fecha_vencimiento
+                        FROM productos
+                        WHERE (
+                            LOWER(codigo_barras) LIKE ?
+                            OR LOWER(descripcion) LIKE ?
+                            OR LOWER(proveedor)   LIKE ?
+                            OR LOWER(grupo)       LIKE ?
+                            OR LOWER(subgrupo)    LIKE ?
+                        )
+                    """
+
+                cursor.execute(_SELECT, params)
                 resultados = cursor.fetchall()
 
-                # Limpiar y mostrar
                 for item in self.tree.get_children():
                     self.tree.delete(item)
 
-                # ✅ Insertar resultados (orden correcto)
                 for producto in resultados:
-                    valores = tuple(producto)
-                    self.tree.insert("", "end", values=valores)
+                    self.tree.insert("", "end", values=tuple(producto))
 
                 if not resultados:
                     messagebox.showinfo("Sin resultados", "No se encontraron productos")
@@ -349,6 +399,35 @@ class InventarioWindow:
         except Exception as e:
             logging.error(f"Error en búsqueda: {e}")
             messagebox.showerror("Error", f"Error en búsqueda: {e}")
+    def _cargar_proveedores(self):
+        """Carga la lista de proveedores únicos desde la BD y puebla el Combobox."""
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT DISTINCT TRIM(proveedor)
+                    FROM productos
+                    WHERE proveedor IS NOT NULL AND TRIM(proveedor) != ''
+                    ORDER BY TRIM(proveedor) ASC
+                """)
+                proveedores = ["(Todos los proveedores)"] + [r[0] for r in cursor.fetchall()]
+            self.combo_proveedor["values"] = proveedores
+            self.combo_proveedor.set("(Todos los proveedores)")
+        except Exception as e:
+            logging.error(f"Error al cargar proveedores: {e}")
+
+    def _filtrar_proveedor(self):
+        """Aplica el filtro de proveedor y recarga la tabla."""
+        # Si hay texto en el buscador, relanza la búsqueda combinada
+        if self.search_entry.get().strip():
+            self._buscar()
+        else:
+            self._cargar_productos()
+
+    def _limpiar_filtro_proveedor(self):
+        """Resetea el filtro de proveedor y muestra todos los productos."""
+        self.combo_proveedor.set("(Todos los proveedores)")
+        self._cargar_productos()
 
     def _ordenar_columna(self, col):
         """Ordena el treeview por columna"""

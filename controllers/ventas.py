@@ -71,15 +71,6 @@ class VentasController:
             )
             return False
 
-        # Advertencia si queda poco stock después de la venta
-        stock_restante = stock_disponible - cantidad
-        if 0 < stock_restante <= 5:
-            messagebox.showwarning(
-                "⚠️ Stock Bajo",
-                f"Después de esta venta quedarán solo {stock_restante:.3f} unidades.\n\n"
-                f"Considera hacer un pedido pronto."
-            )
-
         # Calcular subtotal
         precio_unitario = float(producto['precio_venta'])
         subtotal = precio_unitario * cantidad
@@ -94,7 +85,8 @@ class VentasController:
             cantidad_display,
             precio_unitario,
             subtotal,
-            producto.get('impuesto', '')
+            producto.get('impuesto', ''),
+            ''  # kit_data vacío para productos normales
         ))
 
         # Limpiar campos
@@ -109,6 +101,8 @@ class VentasController:
         Registra la venta y actualiza inventario.
         ✅ MEJORADO: Registra en tabla ventas + validaciones adicionales.
         ✅ NUEVO: Soporta cantidades decimales para fracciones de CJ.
+        ✅ SERVICIOS: Códigos SVC-* no afectan inventario (sin stock check).
+        ✅ KITS: Los componentes se validan y descuentan aquí (no en kit_window).
         """
         items = tree.get_children()
 
@@ -120,58 +114,134 @@ class VentasController:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # Calcular total y preparar detalles de venta
+                # ── Fase 1: Leer y validar todos los items del treeview ──────
                 total = 0.0
                 productos_venta = []
 
-                # ✅ VALIDACIÓN PREVIA: Verificar stock de todos los productos
                 for item in items:
                     valores = tree.item(item, "values")
-                    codigo = valores[0]
+                    codigo  = valores[0]
+                    es_kit  = str(codigo) == "KIT"
+                    es_svc  = str(codigo).startswith("SVC-")
 
-                    # ✅ Cantidad puede ser decimal (fracción de CJ)
-                    cantidad_vendida = _parse_cantidad(valores[2])
-                    if cantidad_vendida is None:
-                        messagebox.showerror(
-                            "Error de datos",
-                            f"Cantidad inválida para el producto {codigo}"
+                    if es_kit:
+                        # ── Validar stock de cada componente del kit ─────────
+                        kit_data_str = valores[6] if len(valores) > 6 else ""
+                        if not kit_data_str:
+                            messagebox.showerror(
+                                "Error de Kit",
+                                "El kit no tiene datos de componentes.\n"
+                                "Elimine el kit y vuelva a armarlo."
+                            )
+                            return False
+
+                        try:
+                            componentes = json.loads(kit_data_str)
+                        except Exception:
+                            messagebox.showerror(
+                                "Error de Kit",
+                                "Los datos del kit están corruptos.\n"
+                                "Elimine el kit y vuelva a armarlo."
+                            )
+                            return False
+
+                        for comp in componentes:
+                            cod_comp  = comp["codigo"]
+                            desc_comp = comp.get("descripcion", cod_comp)
+                            req       = float(comp["descuento_cajas"])
+                            cursor.execute(
+                                "SELECT cantidad FROM productos WHERE codigo_barras = ?",
+                                (cod_comp,)
+                            )
+                            row = cursor.fetchone()
+                            stock_actual = float(row[0]) if row else 0.0
+                            if not row or stock_actual < req:
+                                messagebox.showerror(
+                                    "Stock Insuficiente — Componente de Kit",
+                                    f"❌ No hay stock suficiente para armar el kit.\n\n"
+                                    f"Componente: {desc_comp}\n"
+                                    f"Stock disponible: {stock_actual:.4f}\n"
+                                    f"Cantidad requerida: {req:.6f}\n\n"
+                                    "La venta ha sido CANCELADA."
+                                )
+                                return False
+
+                        subtotal   = float(valores[4])
+                        total     += subtotal
+                        # Costo base = suma de costo_prop de cada componente
+                        # Esto permite al reporte calcular la utilidad real del kit
+                        costo_base = sum(float(c.get('costo_prop', 0)) for c in componentes)
+                        utilidad   = subtotal - costo_base
+                        pct_util   = (utilidad / subtotal * 100) if subtotal > 0 else 0.0
+                        productos_venta.append({
+                            'codigo':          'KIT',
+                            'descripcion':     valores[1],
+                            'cantidad':        1,
+                            'precio_unitario': float(valores[3]),
+                            'precio_compra':   round(costo_base, 2),
+                            'costo_base':      round(costo_base, 2),
+                            'subtotal':        subtotal,
+                            'utilidad':        round(utilidad, 2),
+                            'utilidad_pct':    round(pct_util, 2),
+                            'impuesto':        'KIT',
+                            'es_kit':          True,
+                            'componentes':     componentes,
+                        })
+
+                    elif es_svc:
+                        subtotal = float(valores[4])
+                        total   += subtotal
+                        productos_venta.append({
+                            'codigo':          codigo,
+                            'descripcion':     valores[1],
+                            'cantidad':        _parse_cantidad(valores[2]) or 1,
+                            'precio_unitario': float(valores[3]),
+                            'subtotal':        subtotal,
+                            'impuesto':        valores[5] if len(valores) > 5 else '',
+                            'es_kit':          False,
+                        })
+
+                    else:
+                        # ── Producto normal ───────────────────────────────────
+                        cantidad_vendida = _parse_cantidad(valores[2])
+                        if cantidad_vendida is None:
+                            messagebox.showerror(
+                                "Error de datos",
+                                f"Cantidad inválida para el producto {codigo}"
+                            )
+                            return False
+
+                        cursor.execute(
+                            "SELECT cantidad FROM productos WHERE codigo_barras = ?",
+                            (codigo,)
                         )
-                        return False
+                        row = cursor.fetchone()
+                        if not row or float(row[0]) < cantidad_vendida:
+                            stock_actual = float(row[0]) if row else 0
+                            messagebox.showerror(
+                                "Error de Stock",
+                                f"❌ Stock insuficiente para {codigo}\n\n"
+                                f"Stock actual: {stock_actual:.3f}\n"
+                                f"Cantidad requerida: {cantidad_vendida:.3f}\n\n"
+                                "La venta ha sido CANCELADA."
+                            )
+                            return False
 
-                    # Verificar stock actual antes de proceder
-                    cursor.execute(
-                        "SELECT cantidad FROM productos WHERE codigo_barras = ?",
-                        (codigo,)
-                    )
-                    row = cursor.fetchone()
+                        subtotal = float(valores[4])
+                        total   += subtotal
+                        productos_venta.append({
+                            'codigo':          codigo,
+                            'descripcion':     valores[1],
+                            'cantidad':        cantidad_vendida,
+                            'precio_unitario': float(valores[3]),
+                            'subtotal':        subtotal,
+                            'impuesto':        valores[5] if len(valores) > 5 else '',
+                            'es_kit':          False,
+                        })
 
-                    if not row or float(row[0]) < cantidad_vendida:
-                        stock_actual = float(row[0]) if row else 0
-                        messagebox.showerror(
-                            "Error de Stock",
-                            f"❌ Stock insuficiente para {codigo}\n\n"
-                            f"Stock actual: {stock_actual:.3f}\n"
-                            f"Cantidad requerida: {cantidad_vendida:.3f}\n\n"
-                            "La venta ha sido CANCELADA."
-                        )
-                        return False
-
-                    # Acumular total y detalles
-                    subtotal = float(valores[4])
-                    total += subtotal
-
-                    productos_venta.append({
-                        'codigo': codigo,
-                        'descripcion': valores[1],
-                        'cantidad': cantidad_vendida,
-                        'precio_unitario': float(valores[3]),
-                        'subtotal': subtotal,
-                        'impuesto': valores[5] if len(valores) > 5 else ''
-                    })
-
-                # ✅ REGISTRAR VENTA EN TABLA VENTAS
+                # ── Fase 2: Registrar venta en tabla ventas ──────────────────
                 productos_json = json.dumps(productos_venta, ensure_ascii=False)
-                fecha_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                fecha_actual   = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
                 cursor.execute("""
                     INSERT INTO ventas (fecha, total, productos, cajero)
@@ -181,30 +251,57 @@ class VentasController:
                 venta_id = cursor.lastrowid
                 logging.info(f"Venta registrada - ID: {venta_id}, Total: ${total:,.2f}")
 
-                # ✅ ACTUALIZAR INVENTARIO (soporta decimales para fraccionamiento CJ)
+                # ── Fase 3: Descontar inventario ─────────────────────────────
                 productos_actualizados = 0
+
                 for producto in productos_venta:
-                    cursor.execute("""
-                        UPDATE productos 
-                        SET cantidad = cantidad - ? 
-                        WHERE codigo_barras = ? AND cantidad >= ?
-                    """, (
-                        producto['cantidad'],
-                        producto['codigo'],
-                        producto['cantidad']
-                    ))
+                    if producto.get('es_kit'):
+                        # Descontar cada componente del kit
+                        for comp in producto.get('componentes', []):
+                            cod_comp = comp["codigo"]
+                            req      = float(comp["descuento_cajas"])
+                            cursor.execute("""
+                                UPDATE productos
+                                SET cantidad = ROUND(cantidad - ?, 8)
+                                WHERE codigo_barras = ? AND cantidad >= ?
+                            """, (req, cod_comp, req))
+                            if cursor.rowcount == 0:
+                                raise Exception(
+                                    f"Error al descontar componente de kit: "
+                                    f"{comp.get('descripcion', cod_comp)} — "
+                                    f"posible venta concurrente"
+                                )
+                            productos_actualizados += 1
+                            logging.info(
+                                f"Componente de kit descontado: "
+                                f"{cod_comp} -{req:.6f}"
+                            )
 
-                    if cursor.rowcount == 0:
-                        raise Exception(
-                            f"Error al actualizar stock de {producto['codigo']} - "
-                            f"Posible venta concurrente"
+                    elif not str(producto['codigo']).startswith("SVC-"):
+                        # Producto normal
+                        cursor.execute("""
+                            UPDATE productos 
+                            SET cantidad = cantidad - ? 
+                            WHERE codigo_barras = ? AND cantidad >= ?
+                        """, (
+                            producto['cantidad'],
+                            producto['codigo'],
+                            producto['cantidad']
+                        ))
+                        if cursor.rowcount == 0:
+                            raise Exception(
+                                f"Error al actualizar stock de {producto['codigo']} — "
+                                f"posible venta concurrente"
+                            )
+                        productos_actualizados += 1
+                    else:
+                        logging.info(
+                            f"Servicio registrado (sin stock): {producto['codigo']}"
                         )
-
-                    productos_actualizados += 1
 
                 logging.info(
                     f"Venta completada - ID: {venta_id}, "
-                    f"Productos: {productos_actualizados}, "
+                    f"Movimientos de inventario: {productos_actualizados}, "
                     f"Total: ${total:,.2f}"
                 )
 

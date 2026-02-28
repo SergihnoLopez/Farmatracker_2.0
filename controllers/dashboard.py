@@ -17,8 +17,6 @@ except ImportError:
 class DashboardController:
     """Consultas optimizadas para el dashboard"""
 
-    # Umbral de stock bajo
-    STOCK_BAJO_UMBRAL = 5
     # Días para alertar vencimiento próximo
     DIAS_VENCIMIENTO_PROXIMO = 30
 
@@ -63,17 +61,31 @@ class DashboardController:
 
     @classmethod
     def productos_stock_bajo(cls) -> List[Dict]:
-        """Productos con cantidad <= umbral"""
+        """
+        Productos que cumplen AMBAS condiciones estrictamente:
+        1. cantidad = 0 en inventario
+        2. Han sido vendidos al menos 2 veces históricamente
+        """
         try:
             with sqlite3.connect(str(DB_PATH)) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute("""
-                    SELECT codigo_barras, descripcion, cantidad, proveedor
-                    FROM productos
-                    WHERE cantidad <= ? AND cantidad >= 0
-                    ORDER BY cantidad ASC
+                    SELECT
+                        p.codigo_barras,
+                        p.descripcion,
+                        p.cantidad,
+                        p.proveedor
+                    FROM productos p
+                    WHERE p.cantidad = 0
+                      AND (
+                          SELECT COUNT(*)
+                          FROM ventas v,
+                               json_each(v.productos) AS item
+                          WHERE json_extract(item.value, '$.codigo') = p.codigo_barras
+                      ) >= 2
+                    ORDER BY p.descripcion ASC
                     LIMIT 50
-                """, (cls.STOCK_BAJO_UMBRAL,)).fetchall()
+                """).fetchall()
                 return [dict(r) for r in rows]
         except Exception as e:
             logging.error(f"Error productos_stock_bajo: {e}")

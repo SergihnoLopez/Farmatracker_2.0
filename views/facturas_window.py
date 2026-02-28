@@ -12,6 +12,11 @@ Droguería Irlandesa
    método de pago, observaciones
 """
 import tkinter as tk
+try:
+    from tkcalendar import Calendar as _Calendar
+    _TKCAL_OK = True
+except ImportError:
+    _TKCAL_OK = False
 from tkinter import ttk, messagebox
 import logging
 from datetime import datetime, timedelta
@@ -529,13 +534,69 @@ class FacturasWindow:
             ("Fecha Vencimiento:",    "fecha_vencimiento", "YYYY-MM-DD"),
         ]
 
+        def _abrir_datepicker_fc(entry_destino):
+            """Popup calendario para facturas."""
+            if not _TKCAL_OK:
+                tk.messagebox.showwarning(
+                    "tkcalendar no instalado",
+                    "Instala la dependencia con:\n  pip install tkcalendar\n\n"
+                    "Mientras tanto puedes escribir la fecha manualmente (YYYY-MM-DD).",
+                    parent=dlg
+                )
+                return
+            popup = tk.Toplevel(dlg)
+            popup.title("Seleccionar fecha")
+            popup.grab_set()
+            popup.resizable(False, False)
+            from datetime import date as _date
+            try:
+                val = entry_destino.get().strip()
+                if val == entry_destino._placeholder:
+                    raise ValueError
+                fecha_ini = datetime.strptime(val, "%Y-%m-%d").date()
+            except Exception:
+                fecha_ini = _date.today()
+            cal = _Calendar(
+                popup,
+                selectmode="day",
+                year=fecha_ini.year,
+                month=fecha_ini.month,
+                day=fecha_ini.day,
+                date_pattern="yyyy-mm-dd",
+                locale="es_CO",
+            )
+            cal.pack(padx=10, pady=10)
+            def _confirmar():
+                fecha = cal.get_date()
+                entry_destino.delete(0, "end")
+                entry_destino.insert(0, fecha)
+                entry_destino.config(fg="#1a1a1a")
+                popup.destroy()
+            tk.Button(popup, text="✔ Confirmar",
+                      bg="#4CAF50", fg="white", font=("Segoe UI", 12),
+                      command=_confirmar).pack(pady=(0, 10))
+
         entradas = {}
         for etiqueta, clave, placeholder in campos:
             tk.Label(body, text=etiqueta, font=FONT_B,
                      bg=Colors.BACKGROUND, fg=Colors.TEXT_PRIMARY
                      ).pack(anchor="w", pady=(8, 2))
-            e = tk.Entry(body, font=("Segoe UI", 14), width=38)
-            e.pack(fill="x", pady=(0, 2))
+
+            if clave == "fecha_vencimiento":
+                # Frame con Entry + botón 📅
+                fila = tk.Frame(body, bg=Colors.BACKGROUND)
+                fila.pack(fill="x", pady=(0, 2))
+                e = tk.Entry(fila, font=("Segoe UI", 14), width=32)
+                e.pack(side="left")
+                tk.Button(
+                    fila, text="📅", font=("Segoe UI", 13),
+                    relief="flat", bg=Colors.SURFACE,
+                    command=lambda ent=e: _abrir_datepicker_fc(ent)
+                ).pack(side="left", padx=(4, 0))
+            else:
+                e = tk.Entry(body, font=("Segoe UI", 14), width=38)
+                e.pack(fill="x", pady=(0, 2))
+
             e.insert(0, "")
             # Placeholder simulado
             e._placeholder = placeholder

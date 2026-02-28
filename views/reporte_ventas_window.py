@@ -242,6 +242,7 @@ class ReporteVentasWindow:
         self.tree.pack(side="left", fill="both", expand=True)
 
         self.tree.bind("<<TreeviewSelect>>", self._mostrar_detalle)
+        self.tree.bind("<Button-3>",         self._menu_contextual)
 
     # ── Panel de detalle ──────────────────────────────────────────────────────
 
@@ -446,7 +447,16 @@ class ReporteVentasWindow:
                              tags=(tag,))
 
     def _calcular_costo_venta(self, venta: dict) -> float:
-        """Calcula el costo total de una venta consultando precio_compra en la BD."""
+        """
+        Calcula el costo real de una venta consultando precio_compra en la BD.
+        Si el producto tiene impuesto '19%  IVA' (o '19% IVA'), se aplica
+        el 19% al precio de compra para reflejar el costo real:
+            ej: compra $10.000 con IVA → costo real $11.900
+
+        KITS: usa el campo costo_base guardado en el JSON de la venta,
+        calculado al registrar como suma de costo_prop de sus componentes.
+        No consulta la BD para kits porque su codigo "KIT" no existe en productos.
+        """
         import sqlite3
         from config.settings import DB_PATH
         costo = 0.0
@@ -454,15 +464,31 @@ class ReporteVentasWindow:
             conn = sqlite3.connect(str(DB_PATH))
             cursor = conn.cursor()
             for prod in venta.get("productos", []):
-                codigo   = prod.get("codigo", "")
-                cantidad = float(prod.get("cantidad", 0))  # float: respeta fracciones CJ
+                codigo = prod.get("codigo", "")
+
+                # Kit: el costo ya esta calculado y guardado en el JSON
+                if prod.get("es_kit") or str(codigo) == "KIT":
+                    costo += float(prod.get("costo_base", 0))
+                    continue
+
+                # Servicio SVC-*: costo = 0 (sin mercancia)
+                if str(codigo).startswith("SVC-"):
+                    continue
+
+                # Producto normal: consultar precio_compra en BD
+                cantidad = float(prod.get("cantidad", 0))
                 cursor.execute(
-                    "SELECT precio_compra FROM productos WHERE codigo_barras = ?",
+                    "SELECT precio_compra, impuesto FROM productos WHERE codigo_barras = ?",
                     (codigo,)
                 )
                 row = cursor.fetchone()
                 if row and row[0]:
-                    costo += float(row[0]) * cantidad
+                    precio_compra = float(row[0])
+                    impuesto      = str(row[1] or "").strip()
+                    # Soporta "19%  IVA" (2 espacios) y "19% IVA" (1 espacio)
+                    if impuesto in ("19%  IVA", "19% IVA"):
+                        precio_compra *= 1.19
+                    costo += precio_compra * cantidad
             conn.close()
         except Exception as e:
             logging.warning(f"No se pudo calcular costo de venta {venta.get('id')}: {e}")
@@ -537,6 +563,115 @@ class ReporteVentasWindow:
     # ─────────────────────────────────────────────────────────────────────────
     # ORDENAR COLUMNAS
     # ─────────────────────────────────────────────────────────────────────────
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MENÚ CONTEXTUAL — clic derecho sobre fila del historial
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _menu_contextual(self, event):
+        """Muestra menú contextual al hacer clic derecho sobre una venta."""
+        # Seleccionar la fila bajo el cursor antes de mostrar el menú
+        row = self.tree.identify_row(event.y)
+        if not row:
+            return
+        self.tree.selection_set(row)
+
+        venta_id = int(row)
+        venta = next((v for v in self._ventas_actuales if v["id"] == venta_id), None)
+        if not venta:
+            return
+
+        menu = tk.Menu(self.window, tearoff=0)
+        menu.add_command(
+            label="🖨️  Imprimir factura",
+            font=("Segoe UI", 11),
+            command=lambda: self._imprimir_factura_venta(venta)
+        )
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _imprimir_factura_venta(self, venta: dict):
+        """
+        Imprime la factura de una venta del historial.
+        Mismo formato que el botón Imprimir Factura de venta_window.py:
+        usa FacturaGenerator con lista [codigo, descripcion, cantidad,
+        precio_unitario, subtotal, impuesto].
+        """
+        import os
+        try:
+            from utils.pdf_generator import FacturaGenerator
+        except ImportError:
+            tk.messagebox.showerror(
+                "Módulo faltante",
+                "No se encontró utils.pdf_generator.\nVerifica la instalación.",
+                parent=self.window
+            )
+            return
+
+        productos_raw = venta.get("productos", [])
+        if not productos_raw:
+            tk.messagebox.showwarning(
+                "Sin productos",
+                "Esta venta no tiene detalle de productos registrado.",
+                parent=self.window
+            )
+            return
+
+        # Construir lista en el mismo formato que espera FacturaGenerator:
+        # [codigo, descripcion, cantidad, precio_unitario, subtotal, impuesto]
+        productos = []
+        for prod in productos_raw:
+            codigo   = str(prod.get("codigo", ""))
+            desc     = str(prod.get("descripcion", ""))
+            cantidad = prod.get("cantidad", 1)
+            precio   = prod.get("precio_unitario", 0)
+            subtotal = prod.get("subtotal", 0)
+
+            # Mostrar cantidad limpia (sin decimales si es entero)
+            try:
+                cant_f = float(cantidad)
+                cantidad_display = int(cant_f) if cant_f == int(cant_f) else round(cant_f, 6)
+            except Exception:
+                cantidad_display = cantidad
+
+            # Para kits mostrar "KIT"; para el resto usar el campo impuesto guardado
+            if prod.get("es_kit") or codigo == "KIT":
+                impuesto = "KIT"
+            else:
+                impuesto = str(prod.get("impuesto", ""))
+
+            productos.append([
+                codigo,
+                desc,
+                cantidad_display,
+                precio,
+                subtotal,
+                impuesto,
+            ])
+
+        try:
+            ruta = f"factura_venta_{venta['id']}.pdf"
+            gen  = FacturaGenerator(productos, fecha=venta.get("fecha"))
+            if gen.generar(ruta):
+                if os.name == "nt":
+                    os.startfile(ruta)
+                else:
+                    os.system(f"xdg-open '{ruta}'")
+            else:
+                tk.messagebox.showerror(
+                    "Error",
+                    "No se pudo generar el PDF.\nRevisa logs/farmatrack.log.",
+                    parent=self.window
+                )
+        except Exception as e:
+            logging.error(f"Error imprimiendo factura venta {venta['id']}: {e}", exc_info=True)
+            tk.messagebox.showerror(
+                "Error",
+                f"No se pudo generar la factura:\n{e}",
+                parent=self.window
+            )
 
     _orden_col = {}
 
