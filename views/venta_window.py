@@ -81,10 +81,10 @@ class VentaWindow:
 
     def __init__(self, parent):
         self.window = Toplevel(parent)
-        self.window.grab_set()
+
         self.window.title("Registrar Venta")
         self.window.state("zoomed")
-        self.window.grab_set()
+
         self.metodo_pago_var = StringVar(master=self.window, value="Efectivo")
         self._setup_ui()
 

@@ -37,7 +37,7 @@ class ActualizadorWindow:
         self.window = Toplevel(parent)
         self.window.title("Actualizar Inventario")
         self.window.state("zoomed")
-        self.window.grab_set()
+
         self._setup_ui()
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -433,7 +433,7 @@ class ActualizadorWindow:
         form.title("Nuevo Producto")
         form.geometry("500x620")
         form.transient(self.window)
-        form.grab_set()
+
 
         campos = [
             ("descripcion", "Descripción"),

@@ -7,11 +7,13 @@ Ventana de liquidador de precios - FarmaTrack
 ✅ Nombre del producto se muestra tras selección
 ✅ División de precio de compra con recálculo automático
 """
-from tkinter import Toplevel, Frame, Label, Entry, Listbox, END, Scrollbar, VERTICAL, RIGHT, Y, StringVar
+from tkinter import (Toplevel, Frame, Label, Entry, Listbox, END, Scrollbar,
+                     VERTICAL, RIGHT, LEFT, Y, BOTH, StringVar, W, messagebox)
 from tkinter import ttk
 from config.settings import FONT_STYLE
-from models.database import DatabaseManager
-from utils.formatters import format_precio_display
+from models.database import DatabaseManager, get_db_connection
+from utils.formatters import format_precio_display, format_precio_miles
+import logging
 
 
 class LiquidadorWindow:
@@ -25,6 +27,8 @@ class LiquidadorWindow:
 
         self._sugerencias_data = []     # lista de dicts con datos de cada sugerencia
         self._precio_compra_base = 0.0  # precio original sin dividir
+        self._producto_seleccionado = None  # dict completo del producto actual
+        self._editing_widget = None     # widget Entry temporal para edición inline
         self._setup_ui()
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -201,6 +205,253 @@ class LiquidadorWindow:
 
         self.tree = None  # reemplazado por Labels directos
 
+        # ── Sección de información del inventario ────────────────────────────
+        self._setup_inventario_section()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # SECCIÓN INVENTARIO (Treeview editable)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _setup_inventario_section(self):
+        """Crea el LabelFrame con el Treeview de información del inventario."""
+        self.frame_inventario = ttk.LabelFrame(
+            self.window,
+            text="📦 Información del Inventario",
+        )
+        self.frame_inventario.grid(row=7, column=0, sticky="ew", padx=50, pady=(10, 20))
+        self.frame_inventario.grid_columnconfigure(0, weight=1)
+
+        # Columnas del Treeview
+        columnas_inv = ("ID", "Código", "Descripción", "Cantidad",
+                        "Precio Compra", "Precio Venta", "Impuesto", "Vencimiento")
+
+        self.tree_inventario = ttk.Treeview(
+            self.frame_inventario,
+            columns=columnas_inv,
+            show="headings",
+            height=3,
+        )
+
+        # Configurar encabezados y anchos
+        anchos = {
+            "ID": 50, "Código": 120, "Descripción": 280, "Cantidad": 80,
+            "Precio Compra": 110, "Precio Venta": 110, "Impuesto": 100, "Vencimiento": 110,
+        }
+        for col in columnas_inv:
+            self.tree_inventario.heading(col, text=col, anchor="center")
+            anchor = "w" if col == "Descripción" else "center"
+            self.tree_inventario.column(col, width=anchos[col], anchor=anchor, minwidth=40)
+
+        # Scrollbar
+        sb_inv = Scrollbar(self.frame_inventario, orient=VERTICAL,
+                           command=self.tree_inventario.yview)
+        self.tree_inventario.configure(yscrollcommand=sb_inv.set)
+
+        self.tree_inventario.pack(side=LEFT, fill=BOTH, expand=True, padx=(8, 0), pady=8)
+        sb_inv.pack(side=RIGHT, fill=Y, padx=(0, 8), pady=8)
+
+        # Doble clic para editar celdas
+        self.tree_inventario.bind("<Double-1>", self._on_inventario_doble_clic)
+
+        # Columnas editables (mapeo display → campo BD)
+        self._columnas_editables = {
+            "Cantidad":      "cantidad",
+            "Precio Compra": "precio_compra",
+            "Precio Venta":  "precio_venta",
+            "Impuesto":      "impuesto",
+            "Vencimiento":   "fecha_vencimiento",
+        }
+
+    def _cargar_inventario_producto(self, codigo: str):
+        """Carga los datos del producto en el Treeview de inventario."""
+        # Limpiar treeview
+        for item in self.tree_inventario.get_children():
+            self.tree_inventario.delete(item)
+
+        producto = DatabaseManager.buscar_producto_por_codigo(codigo)
+        if not producto:
+            return
+
+        self._producto_seleccionado = dict(producto)
+
+        self.tree_inventario.insert("", "end", iid="prod_0", values=(
+            producto.get("id_producto", ""),
+            producto.get("codigo_barras", ""),
+            producto.get("descripcion", ""),
+            producto.get("cantidad", 0),
+            format_precio_miles(producto.get("precio_compra", 0)),
+            format_precio_miles(producto.get("precio_venta", 0)),
+            producto.get("impuesto", ""),
+            producto.get("fecha_vencimiento", ""),
+        ))
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # EDICIÓN INLINE EN TREEVIEW DE INVENTARIO
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _on_inventario_doble_clic(self, event):
+        """Inicia edición inline al hacer doble clic en una celda editable."""
+        # Destruir editor previo si existe
+        self._cancelar_edicion()
+
+        region = self.tree_inventario.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+
+        item_id = self.tree_inventario.identify_row(event.y)
+        column_id = self.tree_inventario.identify_column(event.x)
+
+        if not item_id or not column_id:
+            return
+
+        # column_id es "#1", "#2", etc.
+        col_index = int(column_id.replace("#", "")) - 1
+        columnas = self.tree_inventario["columns"]
+
+        if col_index >= len(columnas):
+            return
+
+        col_name = columnas[col_index]
+
+        # Verificar si la columna es editable
+        if col_name not in self._columnas_editables:
+            return
+
+        # Obtener bounding box de la celda
+        bbox = self.tree_inventario.bbox(item_id, column_id)
+        if not bbox:
+            return
+
+        x, y, w, h = bbox
+        valor_actual = self.tree_inventario.set(item_id, col_name)
+
+        # Para precios, limpiar el formato ($1.234) para editar el número puro
+        if col_name in ("Precio Compra", "Precio Venta"):
+            valor_limpio = valor_actual.replace("$", "").replace(".", "").strip()
+            valor_actual = valor_limpio
+        elif col_name == "Cantidad":
+            # Mostrar número limpio
+            valor_actual = valor_actual.strip()
+
+        # Crear Entry superpuesto
+        entry_edit = Entry(
+            self.tree_inventario,
+            font=("Segoe UI", 11),
+            justify="center",
+        )
+        entry_edit.place(x=x, y=y, width=w, height=h)
+        entry_edit.insert(0, valor_actual)
+        entry_edit.select_range(0, END)
+        entry_edit.focus_set()
+
+        # Guardar referencia y contexto
+        self._editing_widget = entry_edit
+        self._editing_item = item_id
+        self._editing_col = col_name
+
+        # Bindings
+        entry_edit.bind("<Return>", self._confirmar_edicion)
+        entry_edit.bind("<Escape>", lambda e: self._cancelar_edicion())
+        entry_edit.bind("<FocusOut>", lambda e: self._cancelar_edicion())
+
+    def _confirmar_edicion(self, event=None):
+        """Confirma la edición, actualiza Treeview y guarda en BD."""
+        if not self._editing_widget:
+            return
+
+        nuevo_valor = self._editing_widget.get().strip()
+        item_id = self._editing_item
+        col_name = self._editing_col
+        campo_bd = self._columnas_editables.get(col_name)
+
+        # Destruir el widget de edición
+        self._editing_widget.destroy()
+        self._editing_widget = None
+
+        if not campo_bd or not self._producto_seleccionado:
+            return
+
+        id_producto = self._producto_seleccionado.get("id_producto")
+        if not id_producto:
+            return
+
+        # Validar según tipo de campo
+        valor_bd = None
+        valor_display = nuevo_valor
+
+        try:
+            if campo_bd in ("cantidad",):
+                # Acepta decimales
+                valor_bd = float(nuevo_valor)
+                if valor_bd < 0:
+                    raise ValueError("Cantidad negativa")
+                # Mostrar como entero si no tiene decimales
+                valor_display = str(int(valor_bd)) if valor_bd == int(valor_bd) else str(valor_bd)
+
+            elif campo_bd in ("precio_compra", "precio_venta"):
+                valor_bd = float(nuevo_valor)
+                if valor_bd < 0:
+                    raise ValueError("Precio negativo")
+                valor_display = format_precio_miles(valor_bd)
+
+            elif campo_bd == "impuesto":
+                valor_bd = nuevo_valor
+                valor_display = nuevo_valor
+
+            elif campo_bd == "fecha_vencimiento":
+                # Validar formato si no está vacío
+                if nuevo_valor:
+                    from datetime import datetime
+                    datetime.strptime(nuevo_valor, "%Y-%m-%d")
+                valor_bd = nuevo_valor
+                valor_display = nuevo_valor
+
+        except ValueError as ve:
+            messagebox.showwarning(
+                "Valor inválido",
+                f"El valor ingresado no es válido para '{col_name}'.\n\n{ve}",
+                parent=self.window,
+            )
+            return
+
+        # Guardar en base de datos
+        ok = DatabaseManager.actualizar_campo_producto(id_producto, campo_bd, valor_bd)
+
+        if ok:
+            # Actualizar Treeview
+            self.tree_inventario.set(item_id, col_name, valor_display)
+
+            # Actualizar dict local
+            self._producto_seleccionado[campo_bd] = valor_bd
+
+            # Si cambió precio_compra, refrescar precios del liquidador
+            if campo_bd == "precio_compra":
+                self._precio_compra_base = valor_bd
+                self.lbl_detalle.config(
+                    text=f"Código: {self._producto_seleccionado.get('codigo_barras', '')}   |   "
+                         f"Precio de compra: {format_precio_display(valor_bd)}"
+                )
+                self.var_division.set("1")
+                self.lbl_precio_dividido.config(text="")
+                self._mostrar_precios(valor_bd)
+
+            logging.info(f"Producto {id_producto}: {campo_bd} → {valor_bd}")
+        else:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo guardar el cambio en '{col_name}'.",
+                parent=self.window,
+            )
+
+    def _cancelar_edicion(self, event=None):
+        """Cancela la edición inline destruyendo el Entry."""
+        if self._editing_widget:
+            try:
+                self._editing_widget.destroy()
+            except Exception:
+                pass
+            self._editing_widget = None
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # BÚSQUEDA Y SUGERENCIAS
@@ -341,6 +592,9 @@ class LiquidadorWindow:
         )
 
         self._mostrar_precios(precio_compra)
+
+        # Cargar info de inventario en el Treeview
+        self._cargar_inventario_producto(codigo)
 
     # ──────────────────────────────────────────────────────────────────────────
     # DIVISIÓN

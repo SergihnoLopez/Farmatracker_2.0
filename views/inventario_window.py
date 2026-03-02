@@ -31,7 +31,6 @@ class InventarioWindow:
         self.window = Toplevel(parent)
         self.window.title("Inventario de Productos")
         self.window.state("zoomed")
-        self.window.grab_set()
         self.conn = None
         self._setup_ui()
         self._cargar_proveedores()
@@ -249,6 +248,16 @@ class InventarioWindow:
             relief="flat",
             command=self._actualizar_total
         ).pack(side=LEFT, padx=5)
+
+        # Barra de estado discreta
+        self.lbl_status = Label(
+            self.window,
+            text="",
+            font=("Segoe UI", 10),
+            fg="#888888",
+            anchor="w",
+        )
+        self.lbl_status.pack(fill='x', padx=15, pady=(0, 2))
 
         # ============================================================
         # MENÚ CONTEXTUAL Y EVENTOS
@@ -475,7 +484,7 @@ class InventarioWindow:
         self.tree.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def _editar_celda(self, event):
-        """Permite editar celda con doble clic"""
+        """Permite editar celda con doble clic o copiar código de barras"""
         region = self.tree.identify("region", event.x, event.y)
         if region != "cell":
             return
@@ -507,13 +516,18 @@ class InventarioWindow:
         ]
 
         nombre_col = columnas[col_num]
+        valores = self.tree.item(item_id, "values")
 
-        # No permitir editar ID ni código de barras
-        if nombre_col in ('id_producto', 'codigo_barras'):
-            messagebox.showwarning(
-                "Advertencia",
-                "No se puede editar el ID o código de barras"
-            )
+        # ── Código de barras: copiar al portapapeles ─────────────────────
+        if nombre_col == 'codigo_barras':
+            codigo = str(valores[col_num])
+            self.window.clipboard_clear()
+            self.window.clipboard_append(codigo)
+            self._mostrar_status(f"📋 Código de barras copiado: {codigo}")
+            return
+
+        # ── ID: no editable, no acción ───────────────────────────────────
+        if nombre_col == 'id_producto':
             return
 
         # Obtener coordenadas y valor actual
@@ -522,7 +536,6 @@ class InventarioWindow:
             return
 
         x, y, width, height = bbox
-        valores = self.tree.item(item_id, "values")
         valor_actual = valores[col_num]
 
         # Crear Entry para edición
@@ -539,8 +552,8 @@ class InventarioWindow:
             if nombre_col in ('precio_compra', 'precio_venta', 'bonificacion'):
                 precio_validado = validate_precio(nuevo_valor)
                 if precio_validado is None:
-                    messagebox.showerror("Error", "Precio inválido")
-                    editor.focus_set()
+                    self._mostrar_status(f"⚠ Precio inválido para '{nombre_col}'")
+                    editor.destroy()
                     return
                 nuevo_valor = str(precio_validado)
 
@@ -552,11 +565,8 @@ class InventarioWindow:
                         raise ValueError
                     nuevo_valor = str(int(val_float)) if val_float == int(val_float) else str(round(val_float, 6))
                 except ValueError:
-                    messagebox.showerror(
-                        "Error",
-                        "Cantidad inválida.\nUse números como: 1, 0.5, 0.2, 1.333"
-                    )
-                    editor.focus_set()
+                    self._mostrar_status("⚠ Cantidad inválida. Use números como: 1, 0.5, 0.2")
+                    editor.destroy()
                     return
 
             # Obtener ID del producto
@@ -565,7 +575,7 @@ class InventarioWindow:
             # Validar nombre de columna
             campo_validado = sanitize_sql_column(nombre_col)
             if not campo_validado:
-                messagebox.showerror("Error", "Columna no válida para edición")
+                self._mostrar_status(f"⚠ Columna '{nombre_col}' no válida para edición")
                 editor.destroy()
                 return
 
@@ -580,9 +590,9 @@ class InventarioWindow:
                 if nombre_col in ('precio_compra', 'precio_venta', 'cantidad'):
                     self._actualizar_total()
 
-                messagebox.showinfo("Éxito", "Celda actualizada correctamente")
+                self._mostrar_status(f"✅ '{nombre_col}' actualizado correctamente")
             else:
-                messagebox.showerror("Error", "No se pudo actualizar el dato")
+                self._mostrar_status(f"❌ Error al guardar '{nombre_col}'")
 
             editor.destroy()
 
@@ -1093,3 +1103,8 @@ class InventarioWindow:
     def _on_close(self):
         """Maneja el cierre de la ventana"""
         self.window.destroy()
+
+    def _mostrar_status(self, texto: str, duracion_ms: int = 4000):
+        """Muestra un mensaje temporal en la barra de estado."""
+        self.lbl_status.config(text=texto)
+        self.window.after(duracion_ms, lambda: self.lbl_status.config(text=""))
