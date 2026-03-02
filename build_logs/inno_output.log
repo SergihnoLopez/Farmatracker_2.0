@@ -1,0 +1,64 @@
+Inno Setup 6 Command-Line Compiler
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 6.7.0
+Non-commercial use only
+
+Preprocessing
+   Reading file: C:\Program Files (x86)\Inno Setup 6\ISPPBuiltins.iss
+Parsing [Setup] section, line 9
+Parsing [Setup] section, line 11
+Parsing [Setup] section, line 13
+Parsing [Setup] section, line 15
+Parsing [Setup] section, line 17
+Parsing [Setup] section, line 19
+Parsing [Setup] section, line 21
+Parsing [Setup] section, line 23
+Parsing [Setup] section, line 25
+Parsing [Setup] section, line 27
+Parsing [Setup] section, line 29
+Parsing [Setup] section, line 31
+Parsing [Setup] section, line 33
+Parsing [Setup] section, line 35
+Reading file (WizardImageFile)
+Reading file (WizardSmallImageFile)
+Preparing Setup program executable
+   Verification successful
+   Updating icons (Setup.e32)
+   Updating version info (Setup.e32)
+Determining language code pages
+Parsing [Languages] section, line 41
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Spanish.isl
+Parsing [Languages] section, line 43
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [Languages] section, line 41
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Spanish.isl
+Parsing [Languages] section, line 43
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Messages in script file
+Reading [Code] section
+Parsing [Tasks] section, line 49
+Parsing [Icons] section, line 63
+Parsing [Icons] section, line 65
+Parsing [UninstallDelete] section, line 77
+Parsing [Run] section, line 71
+Parsing [Files] section, line 55
+Parsing [Files] section, line 57
+Creating setup files
+   Verification successful
+   Updating icons (Setup.exe)
+   Compressing: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\dist\FarmaTrack.exe
+   Compressing: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\installer_files\farma_pro_stocker.db
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (21,719 sec). Resulting Setup program filename is:
+C:\Users\sergi\PycharmProjects\Farmatracker_2.0\FarmaTrack_Installer_v1.1.exe

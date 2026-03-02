@@ -1,0 +1,48 @@
+
+PASO 1 - VERIFICANDO ENTORNO
+  [..] Python 3.12.4
+  [OK] PyInstaller 6.19.0
+  [OK] customtkinter
+  [OK] bcrypt
+  [OK] pillow
+  [OK] fpdf2
+  [OK] pandas
+  [OK] openpyxl
+  [OK] reportlab
+  [OK] pdfplumber
+  [OK] tkcalendar
+  [OK] opencv-python (Video en login)
+  [OK] pywin32 (Impresion directa Windows)
+  [OK] xlrd (Lectura .xls antiguos)
+  [OK] Inno Setup 6
+  [OK] Entorno listo
+
+PASO 2 - LIMPIANDO BUILDS ANTERIORES
+  [OK] Eliminados: 5 elementos
+
+PASO 3 - PREPARANDO ARCHIVOS
+  [OK] Base de datos (5.4 MB)
+  [OK] ctk_design_system.py
+  [OK] Fuentes TTF: 4
+  [OK] Icono: icono.ico
+  [OK] Modulos del proyecto: 34
+
+PASO 4 - GENERANDO EJECUTABLE
+  [OK] Hidden imports: 34 proyecto + 38 dependencias
+  [OK] DLLs pywin32: 2 (impresion Windows)
+  [..] Total args PyInstaller: 208
+  [OK] FarmaTrack.exe - 110.3 MB (1.1min)
+  [..] Log PyInstaller: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\build_logs\pyinstaller_output.log
+
+PASO 5 - GENERANDO INSTALADOR
+  [OK] installer.iss generado
+  [..] Compilando con Inno Setup...
+  [OK] FarmaTrack_Installer_v1.1.exe - 111.7 MB
+
+VERIFICACION POST-BUILD
+  [OK] Ejecutable: 110.3 MB
+  [OK] Instalador: 111.7 MB
+
+RESUMEN
+  [OK] Ejecutable:  dist/FarmaTrack.exe  (110.3 MB)
+  [OK] Instalador:  FarmaTrack_Installer_v1.1.exe  (111.7 MB)
