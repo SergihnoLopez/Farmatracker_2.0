@@ -1,10 +1,10 @@
-120 INFO: PyInstaller: 6.19.0, contrib hooks: 2026.0
-120 INFO: Python: 3.12.4
-140 INFO: Platform: Windows-11-10.0.22631-SP0
-140 INFO: Python environment: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\.venv
-142 INFO: wrote C:\Users\sergi\PycharmProjects\Farmatracker_2.0\FarmaTrack.spec
-143 INFO: Removing temporary files and cleaning cache in C:\Users\sergi\AppData\Local\pyinstaller
-2819 INFO: Module search paths (PYTHONPATH):
+119 INFO: PyInstaller: 6.19.0, contrib hooks: 2026.0
+119 INFO: Python: 3.12.4
+139 INFO: Platform: Windows-11-10.0.22631-SP0
+139 INFO: Python environment: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\.venv
+140 INFO: wrote C:\Users\sergi\PycharmProjects\Farmatracker_2.0\FarmaTrack.spec
+142 INFO: Removing temporary files and cleaning cache in C:\Users\sergi\AppData\Local\pyinstaller
+2661 INFO: Module search paths (PYTHONPATH):
 ['C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Scripts\\pyinstaller.exe',
  'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0',
  'C:\\Users\\sergi\\AppData\\Local\\Programs\\Python\\Python312\\python312.zip',
@@ -17,40 +17,153 @@
  'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\win32\\lib',
  'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\Pythonwin',
  'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0']
-3157 INFO: Appending 'binaries' from .spec
-3157 INFO: Appending 'datas' from .spec
-3180 INFO: checking Analysis
-3180 INFO: Building Analysis because Analysis-00.toc is non existent
-3180 INFO: Looking for Python shared library...
-3180 INFO: Using Python shared library: C:\Users\sergi\AppData\Local\Programs\Python\Python312\python312.dll
-3180 INFO: Running Analysis Analysis-00.toc
-3180 INFO: Target bytecode optimization level: 0
-3180 INFO: Initializing module dependency graph...
-3181 INFO: Initializing module graph hook caches...
-3195 INFO: Analyzing modules for base_library.zip ...
-3954 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-5589 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-6441 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-6838 INFO: Caching module dependency graph...
-6873 INFO: Analyzing C:\Users\sergi\PycharmProjects\Farmatracker_2.0\main.py
-6880 INFO: Processing standard module hook 'hook-customtkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-6954 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
-6955 INFO: TclTkInfo: initializing cached Tcl/Tk info...
-7240 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-7303 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-7319 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-7321 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-7322 INFO: SetuptoolsInfo: initializing cached setuptools info...
-7829 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-8061 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-8156 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-8468 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-9123 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-9242 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-9372 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-9605 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-10987 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-11245 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-11317 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-11664 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
-Aborted by user request.
+2994 INFO: Appending 'binaries' from .spec
+2994 INFO: Appending 'datas' from .spec
+3013 INFO: checking Analysis
+3013 INFO: Building Analysis because Analysis-00.toc is non existent
+3013 INFO: Looking for Python shared library...
+3013 INFO: Using Python shared library: C:\Users\sergi\AppData\Local\Programs\Python\Python312\python312.dll
+3013 INFO: Running Analysis Analysis-00.toc
+3013 INFO: Target bytecode optimization level: 0
+3013 INFO: Initializing module dependency graph...
+3015 INFO: Initializing module graph hook caches...
+3028 INFO: Analyzing modules for base_library.zip ...
+3925 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+3999 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+5378 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6414 INFO: Caching module dependency graph...
+6448 INFO: Analyzing C:\Users\sergi\PycharmProjects\Farmatracker_2.0\main.py
+6454 INFO: Processing standard module hook 'hook-customtkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+6524 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+6525 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+6795 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6857 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6874 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6877 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+6878 INFO: SetuptoolsInfo: initializing cached setuptools info...
+7380 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+7591 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+7679 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+7980 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+8584 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+8701 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+8832 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+9067 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10365 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+10584 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10649 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10951 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11355 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11680 INFO: Processing standard module hook 'hook-bcrypt.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+11688 INFO: Processing standard module hook 'hook-cv2.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14791 INFO: Processing standard module hook 'hook-cryptography.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+16407 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+16947 INFO: Processing standard module hook 'hook-pandas.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+18131 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19333 INFO: Processing standard module hook 'hook-pandas.io.formats.style.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+21331 INFO: Processing standard module hook 'hook-pandas.plotting.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+21749 INFO: Processing standard module hook 'hook-dateutil.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+21873 INFO: Processing pre-safe-import-module hook 'hook-six.moves.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+22602 INFO: Processing standard module hook 'hook-openpyxl.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+24148 INFO: Processing standard module hook 'hook-pandas.io.clipboard.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+24500 INFO: Processing standard module hook 'hook-pdfminer.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+25268 INFO: Processing standard module hook 'hook-pypdfium2.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+25291 INFO: Processing standard module hook 'hook-pypdfium2_raw.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+C:\Users\sergi\PycharmProjects\Farmatracker_2.0\.venv\Lib\site-packages\tkcalendar\calendar_.py:221: SyntaxWarning: invalid escape sequence '\ '
+  font = kw.pop("font", "Liberation\ Sans 9")
+25515 INFO: Processing standard module hook 'hook-babel.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+26219 INFO: Processing standard module hook 'hook-reportlab.lib.utils.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+26289 INFO: Processing standard module hook 'hook-reportlab.pdfbase._fontdata.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+28099 INFO: Analyzing hidden import 'resources'
+28099 INFO: Analyzing hidden import 'win32api'
+28100 INFO: Analyzing hidden import 'pywintypes'
+28102 INFO: Processing standard module hook 'hook-pywintypes.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+28182 INFO: Analyzing hidden import 'reportlab.graphics.barcode.code128'
+28198 INFO: Analyzing hidden import 'reportlab.graphics.barcode.code39'
+28204 INFO: Analyzing hidden import 'reportlab.graphics.barcode.code93'
+28210 INFO: Analyzing hidden import 'reportlab.graphics.barcode.ecc200datamatrix'
+28226 INFO: Analyzing hidden import 'reportlab.graphics.barcode.fourstate'
+28228 INFO: Analyzing hidden import 'reportlab.graphics.barcode.lto'
+28234 INFO: Analyzing hidden import 'reportlab.graphics.barcode.test'
+28264 INFO: Analyzing hidden import 'reportlab.graphics.charts.axes'
+28351 INFO: Analyzing hidden import 'reportlab.graphics.charts.barcharts'
+28417 INFO: Analyzing hidden import 'reportlab.graphics.charts.dotbox'
+28485 INFO: Analyzing hidden import 'reportlab.graphics.charts.doughnut'
+28499 INFO: Analyzing hidden import 'reportlab.graphics.charts.markers'
+28501 INFO: Analyzing hidden import 'reportlab.graphics.charts.slidebox'
+28507 INFO: Analyzing hidden import 'reportlab.graphics.charts.spider'
+28521 INFO: Analyzing hidden import 'reportlab.graphics.samples'
+28521 INFO: Analyzing hidden import 'reportlab.graphics.samples.bubble'
+28526 INFO: Analyzing hidden import 'reportlab.graphics.samples.clustered_bar'
+28530 INFO: Analyzing hidden import 'reportlab.graphics.samples.clustered_column'
+28534 INFO: Analyzing hidden import 'reportlab.graphics.samples.exploded_pie'
+28538 INFO: Analyzing hidden import 'reportlab.graphics.samples.filled_radar'
+28540 INFO: Analyzing hidden import 'reportlab.graphics.samples.line_chart'
+28544 INFO: Analyzing hidden import 'reportlab.graphics.samples.linechart_with_markers'
+28548 INFO: Analyzing hidden import 'reportlab.graphics.samples.radar'
+28552 INFO: Analyzing hidden import 'reportlab.graphics.samples.runall'
+28554 INFO: Analyzing hidden import 'reportlab.graphics.samples.scatter'
+28557 INFO: Analyzing hidden import 'reportlab.graphics.samples.scatter_lines'
+28561 INFO: Analyzing hidden import 'reportlab.graphics.samples.scatter_lines_markers'
+28564 INFO: Analyzing hidden import 'reportlab.graphics.samples.simple_pie'
+28567 INFO: Analyzing hidden import 'reportlab.graphics.samples.stacked_bar'
+28570 INFO: Analyzing hidden import 'reportlab.graphics.samples.stacked_column'
+28575 INFO: Analyzing hidden import 'reportlab.graphics.svgpath'
+28589 INFO: Analyzing hidden import 'reportlab.graphics.testdrawings'
+28590 INFO: Analyzing hidden import 'reportlab.graphics.widgets.adjustableArrow'
+28594 INFO: Analyzing hidden import 'reportlab.graphics.widgets.eventcal'
+28601 INFO: Analyzing hidden import 'reportlab.graphics.widgets.table'
+28606 INFO: Analyzing hidden import 'reportlab.lib.codecharts'
+28647 INFO: Analyzing hidden import 'reportlab.lib.extformat'
+28650 INFO: Analyzing hidden import 'reportlab.lib.fontfinder'
+28683 INFO: Analyzing hidden import 'reportlab.lib.pygments2xpre'
+28686 INFO: Analyzing hidden import 'reportlab.lib.testutils'
+28725 INFO: Analyzing hidden import 'reportlab.lib.yaml'
+28729 INFO: Analyzing hidden import 'reportlab.pdfbase._can_cmap_data'
+28730 INFO: Analyzing hidden import 'reportlab.pdfbase.pdfform'
+28743 INFO: Analyzing hidden import 'reportlab.platypus.figures'
+28756 INFO: Analyzing hidden import 'reportlab.platypus.para'
+28810 INFO: Analyzing hidden import 'reportlab.platypus.tableofcontents'
+28824 INFO: Analyzing hidden import 'reportlab.rl_settings'
+28827 INFO: Analyzing hidden import 'tkcalendar.__main__'
+28830 INFO: Processing module hooks (post-graph stage)...
+28884 WARNING: Hidden import "jinja2" not found!
+29099 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+29135 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+29136 INFO: Processing standard module hook 'hook-tzdata.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+29712 INFO: Performing binary vs. data reclassification (3120 entries)
+29971 INFO: Looking for ctypes DLLs
+29978 WARNING: Ignoring AppKit.framework/AppKit imported from C:\Users\sergi\PycharmProjects\Farmatracker_2.0\.venv\Lib\site-packages\darkdetect\_mac_detect.py - only basenames are supported with ctypes imports!
+30057 INFO: Analyzing run-time hooks ...
+30063 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30065 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30067 INFO: Including run-time hook 'pyi_rth_pywintypes.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+30068 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30069 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+30070 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30159 INFO: Creating base_library.zip...
+30179 INFO: Looking for dynamic libraries
+31640 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\numpy.libs', 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\pandas.libs', 'C:\\Users\\sergi\\PycharmProjects\\Farmatracker_2.0\\.venv\\Lib\\site-packages\\cv2\\../../x64/vc17/bin']
+31640 INFO: Extra DLL search directories (PATH): []
+32954 INFO: Warnings written to C:\Users\sergi\PycharmProjects\Farmatracker_2.0\build\FarmaTrack\warn-FarmaTrack.txt
+33106 INFO: Graph cross-reference written to C:\Users\sergi\PycharmProjects\Farmatracker_2.0\build\FarmaTrack\xref-FarmaTrack.html
+33213 INFO: checking PYZ
+33213 INFO: Building PYZ because PYZ-00.toc is non existent
+33213 INFO: Building PYZ (ZlibArchive) C:\Users\sergi\PycharmProjects\Farmatracker_2.0\build\FarmaTrack\PYZ-00.pyz
+34574 INFO: Building PYZ (ZlibArchive) C:\Users\sergi\PycharmProjects\Farmatracker_2.0\build\FarmaTrack\PYZ-00.pyz completed successfully.
+34661 INFO: checking PKG
+34661 INFO: Building PKG because PKG-00.toc is non existent
+34661 INFO: Building PKG (CArchive) FarmaTrack.pkg
+59681 INFO: Building PKG (CArchive) FarmaTrack.pkg completed successfully.
+59739 INFO: Bootloader C:\Users\sergi\PycharmProjects\Farmatracker_2.0\.venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+59739 INFO: checking EXE
+59739 INFO: Building EXE because EXE-00.toc is non existent
+59739 INFO: Building EXE from EXE-00.toc
+59739 INFO: Copying bootloader EXE to C:\Users\sergi\PycharmProjects\Farmatracker_2.0\dist\FarmaTrack.exe
+59743 INFO: Copying icon to EXE
+59745 INFO: Copying 0 resources to EXE
+59745 INFO: Embedding manifest in EXE
+59748 INFO: Appending PKG archive to EXE
+59815 INFO: Fixing EXE headers
+60237 INFO: Building EXE from EXE-00.toc completed successfully.
+60296 INFO: Build complete! The results are available in: C:\Users\sergi\PycharmProjects\Farmatracker_2.0\dist
